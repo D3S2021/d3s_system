@@ -1,0 +1,14 @@
+# Ignorar entorno virtual
+.venv/
+
+# Archivos de base de datos SQLite
+*.sqlite3
+
+# Archivos temporales de Django
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Archivos de VSCode
+.vscode/
