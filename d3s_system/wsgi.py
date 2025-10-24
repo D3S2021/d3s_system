@@ -15,26 +15,24 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'd3s_system.settings')
 
 application = get_wsgi_application()
 
-# --- Crear o asegurar superusuario automáticamente ---
+# --- Reinicialización de base de datos (sólo una vez) ---
 import os
-from django.contrib.auth import get_user_model
-from django.db import OperationalError
+from django.db import connection
+from django.core.management import call_command
 
-try:
-    User = get_user_model()
-    username = os.getenv("DJANGO_SUPERUSER_USERNAME")
-    email = os.getenv("DJANGO_SUPERUSER_EMAIL")
-    password = os.getenv("DJANGO_SUPERUSER_PASSWORD")
+if os.getenv("RESET_DB_ON_START") == "1":
+    print("⚠️ Reinicializando base de datos...")
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA foreign_keys = OFF;")
+            # eliminar todas las tablas
+            tables = connection.introspection.table_names()
+            for table in tables:
+                cursor.execute(f"DROP TABLE IF EXISTS {table};")
+            cursor.execute("PRAGMA foreign_keys = ON;")
 
-    if username and email and password:
-        if not User.objects.filter(username=username).exists():
-            User.objects.create_superuser(username=username, email=email, password=password)
-            print(f"Superusuario '{username}' creado automáticamente.")
-        else:
-            print(f"Superusuario '{username}' ya existe.")
-    else:
-        print("Variables DJANGO_SUPERUSER_* no definidas, no se crea usuario.")
-except OperationalError:
-    print("La base de datos aún no está lista.")
-except Exception as e:
-    print("Error al crear superusuario:", e)
+        print("✅ Base de datos vaciada. Ejecutando migraciones...")
+        call_command("migrate", interactive=False)
+        print("✅ Migraciones aplicadas correctamente.")
+    except Exception as e:
+        print("❌ Error al reinicializar la base:", e)
