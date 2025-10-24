@@ -1,0 +1,173 @@
+{# SOLO el formulario. NADA de botones ni URLs con proyecto.id #}
+<form id="formProyecto"
+      method="post"
+      action="{{ action_url }}"
+      enctype="multipart/form-data"
+      class="proyecto-form"
+      onsubmit="(function(f){
+        var el=f.querySelector('[name=presupuesto_total]');
+        if(el && el.value){
+          el.value = el.value.replace(/\./g,'').replace(',', '.');
+        }
+      })(this)">
+  {% csrf_token %}
+
+  <div class="modal-body-content">
+    <div class="form-grid">
+      {% if form.non_field_errors %}
+        <div class="error nonfield">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="form-group">
+        <label for="{{ form.nombre.id_for_label }}">Nombre</label>
+        {{ form.nombre }}
+        {% for e in form.nombre.errors %}<div class="error">{{ e }}</div>{% endfor %}
+      </div>
+
+      <div class="form-group">
+        <label for="{{ form.descripcion.id_for_label }}">Descripción</label>
+        {{ form.descripcion }}
+        {% for e in form.descripcion.errors %}<div class="error">{{ e }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.estado.id_for_label }}">Estado</label>
+          {{ form.estado }}
+          {% for e in form.estado.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="form-group">
+          <label for="{{ form.prioridad.id_for_label }}">Prioridad</label>
+          {{ form.prioridad }}
+          {% for e in form.prioridad.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.responsable.id_for_label }}">Responsable</label>
+          {{ form.responsable }}
+          {% for e in form.responsable.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+
+        {% if mostrar_duplicar and proyectos_existentes %}
+          <div class="form-group">
+            <label for="duplicarDe">Duplicar de</label>
+            <select id="duplicarDe" name="duplicarDe" class="form-control">
+              <option value="">Seleccioná un proyecto…</option>
+              {% for p in proyectos_existentes %}
+                <option value="{{ p.id }}">{{ p.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="form-group">
+        <label>Miembros</label>
+        <div class="miembros-grid">
+          {% with selected=form.miembros.value %}
+            {% for usuario in form.fields.miembros.queryset %}
+              {% if usuario.username|lower != 'admin' %}
+                <label class="miembro-item">
+                  <input type="checkbox" name="miembros" value="{{ usuario.id }}"
+                         {% if selected and usuario.id|stringformat:"s" in selected %}checked{% endif %}>
+                  {{ usuario.get_full_name|default:usuario.username }}
+                </label>
+              {% endif %}
+            {% endfor %}
+          {% endwith %}
+        </div>
+        {% for e in form.miembros.errors %}<div class="error">{{ e }}</div>{% endfor %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.fecha_inicio.id_for_label }}">Fecha inicio</label>
+          {{ form.fecha_inicio }}
+          {% for e in form.fecha_inicio.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="form-group">
+          <label for="{{ form.fecha_fin.id_for_label }}">Fecha fin</label>
+          {{ form.fecha_fin }}
+          {% for e in form.fecha_fin.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="id_presupuesto_total">Presupuesto total</label>
+          <input id="id_presupuesto_total" name="presupuesto_total" type="text" inputmode="decimal"
+                 value="{{ form.presupuesto_total.value|default_if_none:'' }}"
+                 oninput="(function(el){var s=(el.value||'').replace(/\D/g,'');if(!s){el.value='';return;}var n=parseInt(s,10)/100;el.value=n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});})(this)"
+                 onblur="(function(el){if(!el.value)return;var raw=el.value.replace(/\./g,'').replace(',','.');var n=parseFloat(raw);if(!isNaN(n)){el.value=n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});}})(this)">
+          {% for e in form.presupuesto_total.errors %}<div class="error">{{ e }}</div>{% endfor %}
+        </div>
+
+        <div class="form-group">
+          <label for="presupuesto_pdf">Adjuntar presupuesto (PDF)</label>
+          <input type="file" name="presupuesto_pdf" id="presupuesto_pdf" accept="application/pdf">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer" style="text-align:right; margin-top: 15px;">
+      <button type="button" id="btnCancelarProyecto" class="btn btn-secondary">Cancelar</button>
+      <button type="submit" class="btn btn-primary">{{ submit_label|default:"Guardar" }}</button>
+    </div>
+  </div>
+</form>
+
+<style>
+  .proyecto-form { width: 100%; max-width: 720px; margin: 0 auto; }
+  .modal-body-content { padding: 16px; }
+  .form-grid { display: flex; flex-direction: column; gap: 12px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; }
+  .form-control, textarea, select,
+  input[type="text"], input[type="date"], input[type="file"] { width: 100%; box-sizing: border-box; }
+  .miembros-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .miembro-item { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .error { color: #b42318; font-size: 12px; margin-top: 4px; }
+  .nonfield { margin-bottom: 8px; }
+  .modal-footer { border-top: 1px solid #eee; padding-top: 10px; }
+</style>
+
+<script>
+/* Duplicar (solo si existe el select) */
+(function(){
+  const duplicarSelect = document.getElementById('duplicarDe');
+  if (!duplicarSelect) return;
+  duplicarSelect.addEventListener('change', function(){
+    const id = this.value;
+    if (!id) return;
+    fetch(`/proyectos/api/${id}/`)
+      .then(r => r.json())
+      .then(data => {
+        const map = { nombre:'nombre', descripcion:'descripcion', estado:'estado',
+                      prioridad:'prioridad', responsable_id:'responsable',
+                      fecha_inicio:'fecha_inicio', fecha_fin:'fecha_fin',
+                      presupuesto_total:'presupuesto_total' };
+        Object.entries(map).forEach(([src, dst]) => {
+          const el = document.querySelector(`[name="${dst}"]`);
+          if (!el || el.type === 'file') return;
+          if (src === 'presupuesto_total') {
+            if (data[src] != null && el.value === '') {
+              const n = parseFloat(String(data[src]).replace(',', '.'));
+              if (!isNaN(n)) el.value = n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+            }
+          } else if (el.value === '') {
+            el.value = data[src] ?? '';
+          }
+        });
+        if (Array.isArray(data.miembros_ids)) {
+          const ids = data.miembros_ids.map(String);
+          document.querySelectorAll('input[name="miestros"]').forEach(cb => {
+            cb.checked = ids.includes(cb.value);
+          });
+        }
+      })
+      .catch(() => alert('No se pudo duplicar el proyecto.'));
+  });
+})();
+</script>

@@ -1,0 +1,13 @@
+{# templates/proyectos/form.html #}
+{% extends "_base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+  <h1>{{ titulo }}</h1>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <table>{{ form.as_table }}</table>
+    <button type="submit" class="button">Guardar</button>
+    <a href="{% url 'proyectos:dashboard' %}">Cancelar</a>
+  </form>
+{% endblock %}

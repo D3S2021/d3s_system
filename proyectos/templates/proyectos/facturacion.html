@@ -1,0 +1,10 @@
+{% extends "_base.html" %}
+{% block title %}Facturación · {{ proyecto.nombre }}{% endblock %}
+
+{% block content %}
+<h1>Facturación de proyecto</h1>
+<p><strong>Proyecto:</strong> {{ proyecto.nombre }}</p>
+<p>Esta sección está en construcción. Próximamente: altas de facturas, acreditaciones y resumen.</p>
+
+<p><a href="{% url 'proyectos:detalle' proyecto.id %}">← Volver al proyecto</a></p>
+{% endblock %}

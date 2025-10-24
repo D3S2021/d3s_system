@@ -1,0 +1,61 @@
+{# templates/proyectos/lista.html #}
+{% extends "_base.html" %}
+{% include "proyectos/_cards_nav.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cards-wrap{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:12px; margin:4px 0 18px;
+  }
+  .card-link{
+    display:block; border:1px solid #e5e5e5; border-radius:8px; background:#fff;
+    padding:14px 16px; text-decoration:none; color:#222;
+  }
+  .card-link:hover{ box-shadow:0 1px 8px rgba(0,0,0,.06); }
+  .card-link.active{ outline:2px solid #2c7be5; }
+  .card-number{ font-size:32px; font-weight:700; margin:0 0 6px; color:#2c7be5; }
+  .card-title{ margin:0; color:#666; }
+
+  table{ width:100%; border-collapse:collapse; }
+  th,td{ padding:10px 8px; border-bottom:1px solid #eee; text-align:left; }
+  th{ background:#fafafa; }
+</style>
+{% endblock %}
+
+{% block content %}
+  {% include "proyectos/_cards_nav.html" %}
+
+  <h1 style="margin:6px 0 10px">{{ titulo }}</h1>
+
+  {% if proyectos %}
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Descripción</th>
+          <th>Responsable</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in proyectos %}
+          <tr>
+            <td><a href="{% url 'proyectos:detalle' p.id %}">{{ p.nombre }}</a></td>
+            <td>{{ p.descripcion|default:"—"|truncatechars:120 }}</td>
+            <td>
+              {% if p.responsable %}
+                {{ p.responsable.get_full_name|default:p.responsable.username }}
+              {% else %}—{% endif %}
+            </td>
+            <td><a href="{% url 'proyectos:detalle' p.id %}">Ver</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No hay proyectos en esta sección.</p>
+  {% endif %}
+{% endblock %}

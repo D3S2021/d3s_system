@@ -1,0 +1,128 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Editar transacción{% endblock %}
+
+{% block content_adminlike %}
+<style>
+  .money-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .money-wrap .peso {
+    font-weight: bold;
+  }
+</style>
+
+
+<h1>Editar transacción #{{ tx.id }}</h1>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  <fieldset class="module aligned">
+
+    {# Si el form tiene campo 'categoria' (Franco), lo mostramos #}
+    {% if form.categoria %}
+      <div class="form-row field-categoria">
+        <div>
+          <label for="{{ form.categoria.id_for_label }}">Categoría:</label>
+          {{ form.categoria.errors }}
+          {{ form.categoria }}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="form-row field-fecha">
+      <div>
+        <label for="{{ form.fecha.id_for_label }}">Fecha:</label>
+        {{ form.fecha.errors }}
+        {{ form.fecha }}
+      </div>
+    </div>
+
+    <div class="form-row field-monto">
+      <div>
+        <label for="monto_display">Monto (ARS):</label>
+        <input type="text"
+              id="monto_display"
+              class="vTextField"
+              inputmode="decimal"
+              autocomplete="off"
+              required
+              placeholder="$ 0,00">
+        <input type="hidden" id="id_monto" name="monto" value="{{ form.monto.value|default:tx.monto }}">
+        <small>Ej.: $ 1.234,56</small>
+      </div>
+    </div>
+
+
+
+    <div class="form-row field-descripcion">
+      <div>
+        <label for="{{ form.descripcion.id_for_label }}">Descripción:</label>
+        {{ form.descripcion.errors }}
+        {{ form.descripcion }}
+      </div>
+    </div>
+  </fieldset>
+
+  <div class="submit-row">
+    <button type="submit" class="default">Guardar cambios</button>
+    <a class="button cancel-link" href="{% url 'economia:transacciones' %}" style="margin-left:10px;">Cancelar</a>
+  </div>
+  <script>
+(function(){
+  function toNormalized(val){
+    if (!val) return "";
+    let s = (""+val).trim();
+    // quitar símbolos y espacios
+    s = s.replace(/\s/g,"").replace(/\$/g,"").replace(/[A-Za-z]/g,"");
+    // si hay . y , asumimos . = miles y , = decimales (formato AR)
+    if (s.includes(",") && s.includes(".")) {
+      s = s.replace(/\./g,"").replace(/,/g,".");
+    } else if (s.includes(",")) {
+      s = s.replace(/,/g,".");
+    }
+    // dejar solo dígitos y un punto decimal
+    s = s.replace(/[^0-9.]/g,"");
+    const parts = s.split(".");
+    if (parts.length > 2) s = parts.shift() + "." + parts.join("");
+    return s;
+  }
+
+  function formatARS(n){
+    const num = Number(n);
+    if (isNaN(num)) return "";
+    return new Intl.NumberFormat("es-AR", { style:"currency", currency:"ARS" }).format(num);
+  }
+
+  const disp = document.getElementById("monto_display");
+  const hid  = document.getElementById("id_monto");
+  if (!disp || !hid) return;
+
+  // Inicializar visual desde el hidden si viene con valor
+  if (hid.value) disp.value = formatARS(hid.value);
+
+  disp.addEventListener("input", function(){
+    hid.value = toNormalized(disp.value);
+  });
+
+  disp.addEventListener("blur", function(){
+    if (hid.value) disp.value = formatARS(hid.value);
+  });
+
+  disp.addEventListener("focus", function(){
+    disp.value = hid.value || "";
+  });
+
+  // Al enviar el formulario, normalizamos por las dudas
+  const form = disp.closest("form");
+  if (form) {
+    form.addEventListener("submit", function(){
+      hid.value = toNormalized(disp.value);
+    });
+  }
+})();
+</script>
+
+</form>
+{% endblock %}

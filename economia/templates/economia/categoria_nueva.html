@@ -1,0 +1,29 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Nueva categoría{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .wrap{padding:8px}
+  .form-row{margin:10px 0}
+</style>
+{% endblock %}
+
+{% block content_adminlike %}
+<div class="wrap">
+  <h2>Nueva categoría de {{ tipo }}</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-row">
+      {{ form.nombre.label_tag }}<br>
+      {{ form.nombre }}
+      {% if form.nombre.errors %}<div class="errorlist">{{ form.nombre.errors }}</div>{% endif %}
+    </div>
+
+    <button type="submit">Guardar</button>
+    <a class="button" href="{% url 'economia:planificar_mes' %}?year={{ year }}&month={{ month }}" style="margin-left:8px">
+      Cancelar
+    </a>
+  </form>
+</div>
+{% endblock %}

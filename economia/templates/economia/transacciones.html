@@ -1,0 +1,92 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Transacciones{% endblock %}
+
+{% block content_adminlike %}
+
+
+<div class="cols" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+
+  <!-- GASTOS -->
+  <section>
+    <h2>Gastos: ${{ total_gastos }}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Importe</th>
+          <th>Descripción</th>
+          <th>Categoría</th>
+          <th>Usuario</th>
+          {% if perms.economia.can_validate_transactions %}
+            <th>Acciones</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in gastos %}
+        <tr>
+          <td>{{ t.fecha }}</td>
+          <td>${{ t.monto }}</td>
+          <td>{{ t.descripcion }}</td>
+          <td>{{ t.categoria.nombre|default:"-" }}</td>
+          <td>{{ t.usuario.username|default:"-" }}</td>
+          {% if perms.economia.can_validate_transactions %}
+            <td>
+              <a href="{% url 'economia:tx_editar' t.id %}">Editar</a> |
+              <a href="#" onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">Eliminar</a>
+              <form id="del-form-{{ t.id }}" method="post" action="{% url 'economia:tx_eliminar' t.id %}" style="display:none;">
+                {% csrf_token %}
+              </form>
+            </td>
+          {% endif %}
+        </tr>
+      {% empty %}
+        <tr><td colspan="{% if perms.economia.can_validate_transactions %}6{% else %}5{% endif %}">Sin gastos aprobados.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <!-- INGRESOS -->
+  <section>
+    <h2>Ingresos: ${{ total_ingresos }}</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Importe</th>
+          <th>Descripción</th>
+          <th>Categoría</th>
+          <th>Usuario</th>
+          {% if perms.economia.can_validate_transactions %}
+            <th>Acciones</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in ingresos %}
+        <tr>
+          <td>{{ t.fecha }}</td>
+          <td>${{ t.monto }}</td>
+          <td>{{ t.descripcion }}</td>
+          <td>{{ t.categoria.nombre|default:"-" }}</td>
+          <td>{{ t.usuario.username|default:"-" }}</td>
+          {% if perms.economia.can_validate_transactions %}
+            <td>
+              <a href="{% url 'economia:tx_editar' t.id %}">Editar</a> |
+              <a href="#" onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">Eliminar</a>
+              <form id="del-form-{{ t.id }}" method="post" action="{% url 'economia:tx_eliminar' t.id %}" style="display:none;">
+                {% csrf_token %}
+              </form>
+            </td>
+          {% endif %}
+        </tr>
+      {% empty %}
+        <tr><td colspan="{% if perms.economia.can_validate_transactions %}6{% else %}5{% endif %}">Sin ingresos aprobados.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+</div>
+{% endblock %}

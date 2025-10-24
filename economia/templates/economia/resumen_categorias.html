@@ -1,0 +1,129 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Resumen por categorías{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .wrap{padding:4px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  h2{margin:8px 0 16px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:10px;border-bottom:1px solid #e5e5e5;vertical-align:middle}
+  .right{text-align:right}
+  .muted{color:#6b7280}
+
+  /* chips de estado */
+  .chip{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px;font-weight:600}
+  .chip-ok{background:#eaf7ec;color:#237a3b;border:1px solid #bfe6c7}
+  .chip-warn{background:#fde8e8;color:#9f1c1c;border:1px solid #f5b5b5}
+
+  .head-actions{display:flex;gap:12px;align-items:center;margin-bottom:14px}
+</style>
+{% endblock %}
+
+{% block content_adminlike %}
+<div class="wrap">
+
+  <div class="head-actions">
+    <a class="button" href="{% url 'economia:planificar_mes' %}?year={{ year }}&month={{ month }}">
+      Planificar este mes
+    </a>
+  </div>
+
+  <div class="cols">
+    <!-- GASTOS -->
+    <section>
+      <h2>Gastos</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:55%">Categoría</th>
+            <th class="right">Plan</th>
+            <th class="right">Real</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in gastos %}
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:10px">
+                <strong>{{ c.nombre }}</strong>
+                {% if c.plan > 0 %}
+                  {% if c.is_over %}
+                    <span class="chip chip-warn">SOBREPASADO</span>
+                  {% else %}
+                    <span class="chip chip-ok">DENTRO DE LO PLANIFICADO</span>
+                  {% endif %}
+                {% else %}
+                  <span class="muted">Sin plan cargado</span>
+                {% endif %}
+              </div>
+
+              {% if c.plan > 0 %}
+                {% if c.is_over %}
+                  <div style="margin-top:6px;color:#9f1c1c;font-weight:600">
+                    Sobrepasado ${{ c.over_amount|floatformat:2 }}
+                  </div>
+                {% else %}
+                  <div class="muted" style="margin-top:6px">
+                    Avance: {{ c.progress_pct }}%
+                  </div>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td class="right">${{ c.plan|floatformat:2 }}</td>
+            <td class="right">${{ c.real|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3">Sin datos.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- INGRESOS -->
+    <section>
+      <h2>Ingresos</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:55%">Categoría</th>
+            <th class="right">Plan</th>
+            <th class="right">Real</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in ingresos %}
+          <tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:10px">
+                <strong>{{ c.nombre }}</strong>
+                {% if not c.plan or c.plan == 0 %}
+                  <span class="muted">Sin plan cargado</span>
+                {% endif %}
+              </div>
+
+              {% if c.plan > 0 %}
+                {% if c.is_over %}
+                  <div style="margin-top:6px;color:#237a3b;font-weight:600">
+                    Sobrepasado ${{ c.over_amount|floatformat:2 }}
+                  </div>
+                {% else %}
+                  <div class="muted" style="margin-top:6px">
+                    Avance: {{ c.progress_pct }}%
+                  </div>
+                {% endif %}
+              {% endif %}
+            </td>
+            <td class="right">${{ c.plan|floatformat:2 }}</td>
+            <td class="right">${{ c.real|floatformat:2 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3">Sin datos.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </div>
+</div>
+{% endblock %}

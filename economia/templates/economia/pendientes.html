@@ -1,0 +1,75 @@
+{% extends "economia/_base_adminlike.html" %}
+{# economia/pendientes.html #}
+{% block title %}Transacciones pendientes{% endblock %}
+
+{% block content_adminlike %}
+
+<table>
+  <thead>
+    <tr>
+      <th>Fecha</th>
+      <th>Usuario</th>
+      <th>Descripción</th>
+      <th>Importe</th>
+      <th>Categoría (al aprobar)</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for t in pendientes %}
+    <tr>
+      <td>{{ t.fecha }}</td>
+      <td>{{ t.usuario.username|default:"-" }}</td>
+      <td>{{ t.descripcion }}</td>
+      <td>${{ t.monto }}</td>
+      <td>
+        <form method="post" action="{% url 'economia:pendientes' %}" style="display:flex; gap:8px; align-items:center">
+          {% csrf_token %}
+          <input type="hidden" name="tx_id" value="{{ t.id }}">
+
+          {# Selector de categoría para aprobar #}
+          <select name="categoria_id" title="Categoría al aprobar">
+            {% if t.categoria and t.categoria.tipo == "gasto" %}
+              {% for c in categorias_gasto %}
+                <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+              {% endfor %}
+            {% elif t.categoria and t.categoria.tipo == "ingreso" %}
+              {% for c in categorias_ingreso %}
+                <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+              {% endfor %}
+            {% else %}
+              {# Si no está definida la categoría todavía, por defecto mostramos gastos #}
+              {% for c in categorias_gasto %}
+                <option value="{{ c.id }}">{{ c.nombre }}</option>
+              {% endfor %}
+            {% endif %}
+          </select>
+      </td>
+      <td style="white-space:nowrap">
+          <button type="submit" name="accion" value="aprobar">Aprobar</button>
+
+          {# Comentario para rechazo #}
+          <input type="text" name="comentario" placeholder="Motivo del rechazo" style="width:220px;">
+          <button type="submit" name="accion" value="rechazar" class="btn-rechazar">Rechazar</button>
+        </form>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6">No hay pendientes.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<script>
+  // Hace obligatorio el comentario SOLO cuando se presiona "Rechazar"
+  document.querySelectorAll('form').forEach(function(f){
+    const rechBtn = f.querySelector('.btn-rechazar');
+    const com = f.querySelector('input[name="comentario"]');
+    if (rechBtn && com) {
+      rechBtn.addEventListener('click', function(){
+        com.setAttribute('required', 'required');
+      });
+    }
+  });
+</script>
+{% endblock %}

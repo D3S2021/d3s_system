@@ -1,0 +1,23 @@
+{% extends "proyectos/_base_proyectos.html" %}
+{% block title %}Historial · {{ proyecto.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Historial · {{ proyecto.nombre }}</h1>
+
+<div style="margin:12px 0">
+  <a href="{% url 'proyectos:detalle' proyecto.id %}">Resumen</a> |
+  <a href="{% url 'proyectos:facturacion' proyecto.id %}">Facturación</a> |
+  <a href="{% url 'proyectos:historial' proyecto.id %}"><b>Historial</b></a>
+</div>
+
+<ul style="list-style:none;padding:0">
+  {% for e in eventos %}
+    <li style="padding:8px 0;border-bottom:1px solid #eee">
+      <div style="font-size:13px;color:#666">{{ e.creado_en|date:"d/m/Y H:i" }} · {{ e.get_tipo_display }}</div>
+      <div>{{ e.descripcion }}</div>
+      {% if e.actor %}<div style="font-size:12px;color:#888">por {{ e.actor.get_username }}</div>{% endif %}
+    </li>
+  {% empty %}
+    <li>No hay eventos registrados aún.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

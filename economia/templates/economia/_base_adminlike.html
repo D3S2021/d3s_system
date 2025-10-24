@@ -1,0 +1,70 @@
+{% extends "_base.html" %}
+{% load static %}
+
+{% block title %}Economía{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tabs { margin: 10px 0 20px; }
+  .tabs a {
+    display:inline-block; padding:8px 12px; margin-right:8px;
+    border:1px solid #d8d8d8; border-bottom:none; background:#f8f8f8; text-decoration:none;
+  }
+  .tabs a.active { background:#fff; font-weight:bold; }
+  .panel { border:1px solid #d8d8d8; background:#fff; padding:16px; }
+
+  /* utilidades usadas por dashboard/resumen */
+  .cards { display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .card { flex:0 0 220px; border:1px solid #e5e5e5; border-radius:6px; padding:12px; }
+  .k { font-size:12px; color:#666; }
+  .number { font-size:20px; }
+
+  .col2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+
+  .bar { height:10px; background:#edf0f2; border-radius:5px; overflow:hidden; }
+  .bar > span { display:block; height:100%; background:#2c7be5; }
+  .bar.gasto > span { background:#d9534f; }
+
+  table { width:100%; border-collapse:collapse; }
+  th,td { padding:8px; border-bottom:1px solid #eee; }
+  th { text-align:left; background:#fafafa; }
+</style>
+{% endblock %}
+
+{% block content %}
+  {% with name=request.resolver_match.url_name %}
+  <div class="tabs">
+    <a href="{% url 'economia:dashboard' %}"
+       class="{% if name in 'dashboard dashboard_economia' %}active{% endif %}">
+       Resumen
+    </a>
+
+    <a href="{% url 'economia:resumen' %}"
+       class="{% if name in 'resumen resumen_categorias planificar_mes' %}active{% endif %}">
+       Resumen categorías
+    </a>
+
+    <a href="{% url 'economia:transacciones' %}"
+       class="{% if name == 'transacciones' %}active{% endif %}">
+       Transacciones
+    </a>
+
+    <a href="{% url 'economia:cierre' %}"
+       class="{% if name in 'cierre cierre_caja' %}active{% endif %}">
+       Cierre de caja
+    </a>
+
+    {% if perms.economia.can_validate_transactions %}
+      <a href="{% url 'economia:pendientes' %}"
+         class="{% if name == 'pendientes' %}active{% endif %}">
+         Transacciones pendientes
+      </a>
+    {% endif %}
+  </div>
+  {% endwith %}
+
+  <div class="panel">
+    {# No repetimos mensajes aquí; el _base.html principal ya los muestra #}
+    {% block content_adminlike %}{% endblock %}
+  </div>
+{% endblock %}

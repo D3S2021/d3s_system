@@ -1,0 +1,14 @@
+{% extends "_base.html" %}
+{% block title %}Notificación{% endblock %}
+
+{% block content %}
+  <h1>{{ n.titulo }}</h1>
+  <p><small>{{ n.creada|date:"d/m/Y H:i" }}</small></p>
+  {% if n.cuerpo %}
+    <p>{{ n.cuerpo|linebreaksbr }}</p>
+  {% else %}
+    <p>(Sin contenido)</p>
+  {% endif %}
+
+  <p><a href="{% url 'notificaciones:lista' %}">← Volver a todas las notificaciones</a></p>
+{% endblock %}

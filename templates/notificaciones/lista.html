@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+{% block title %}Mis notificaciones{% endblock %}
+
+{% block content %}
+<h1>Mis notificaciones</h1>
+
+{% if notificaciones %}
+  <ul style="list-style:none;padding:0;margin:0">
+    {% for n in notificaciones %}
+      <li style="margin:10px 0; border:1px solid #e5e5e5; padding:12px; border-radius:6px; background:#fff;">
+        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start">
+          <div>
+            <strong>{{ n.titulo }}</strong>
+            <div style="font-size:12px; color:#666">{{ n.creada|date:"d/m/Y H:i" }}</div>
+            {% if n.cuerpo %}
+              <p style="margin:6px 0 0">{{ n.cuerpo }}</p>
+            {% endif %}
+            {% if n.url %}
+              <p style="margin:6px 0 0">
+                <a href="{{ n.url }}">Ir al detalle</a>
+              </p>
+            {% endif %}
+          </div>
+
+          <div>
+            {% if not n.leida %}
+              <a class="button" href="{% url 'notificaciones:marcar_leida' n.id %}">Marcar como leída</a>
+            {% else %}
+              <span style="color:#6c757d;font-size:12px">Leída</span>
+            {% endif %}
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <!-- Botón para marcar todas como leídas -->
+  <form method="post" action="{% url 'notificaciones:marcar_todas' %}" style="margin-top:12px">
+    {% csrf_token %}
+    <button type="submit" class="button">Marcar todas como leídas</button>
+  </form>
+{% else %}
+  <p>No tenés notificaciones.</p>
+{% endif %}
+{% endblock %}

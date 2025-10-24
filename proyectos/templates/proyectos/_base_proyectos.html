@@ -1,0 +1,15 @@
+{% extends "_base.html" %}
+
+{% block title %}Proyectos · {% endblock %}
+
+{# Si alguna vista inyecta CSS adicional, lo dejamos pasar #}
+{% block extra_css %}{{ block.super }}{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    {% block contenido %}{% endblock %}
+  </div>
+
+  {# IMPORTANTE: aquí renderizamos el JS específico de cada vista (por ej. detalle.html) #}
+  {% block extra_js %}{% endblock %}
+{% endblock %}

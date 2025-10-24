@@ -1,0 +1,492 @@
+{# templates/perfil.html #}
+{% extends "_base.html" %}
+
+{% block title %}Perfil de {{ request.user.username }}{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .grid-accesos{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+    gap:14px;
+    margin:12px 0 20px;
+  }
+  /* Card */
+  .acceso{
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    background:#fff;
+    box-shadow:0 1px 2px rgba(16,24,40,.04);
+    transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .acceso:hover{
+    transform:translateY(-2px);
+    box-shadow:0 10px 15px -3px rgba(16,24,40,.08),0 4px 6px -4px rgba(16,24,40,.08);
+    border-color:#d0d7de;
+  }
+  /* Contenido clickeable */
+  .acc-link{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    text-decoration:none;
+    color:inherit;
+    width:100%;
+    padding:14px 14px 16px;
+    border:none;
+    background:transparent;
+    text-align:left;
+    cursor:pointer;
+    border-radius:12px;
+  }
+  .acc-link:focus-visible{
+    outline:none;
+    box-shadow:0 0 0 3px rgba(56,97,251,.25);
+  }
+  .acc-icon{
+    width:40px;height:40px;display:grid;place-items:center;
+    font-size:20px;border-radius:10px;flex:0 0 auto;
+    background:linear-gradient(180deg,#f4f8ff,#ecf2ff);
+    color:#3861fb;
+  }
+  .acc-text{ display:flex; flex-direction:column; gap:6px; }
+  .acc-title{ font-weight:700; }
+  .acc-desc{ color:#667085; font-size:14px; line-height:1.35; margin:0; }
+
+  /* ——— Título estético ——— */
+  .perfil-header{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:10px;
+  }
+  .perfil-icon{
+    width:44px;height:44px;
+    border-radius:12px;
+    background:linear-gradient(180deg,#eff6ff,#e0e7ff);
+    display:grid;place-items:center;
+    color:#1d4ed8;
+    font-size:22px;
+    box-shadow:0 4px 10px rgba(29,78,216,.15);
+  }
+  .perfil-title{
+    margin:0;
+    font-weight:800;
+    letter-spacing:-.02em;
+    font-size:clamp(22px,2vw,30px);
+    line-height:1.1;
+    background:linear-gradient(90deg,#0f172a,#334155);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+
+  .linklike{ font-weight:600; background:none; border:none; padding:0; cursor:pointer; color:#2c7be5; }
+  .linklike:hover{ text-decoration:underline; }
+  .badge-enviada{ background:#e7f1ff; color:#1a73e8; padding:2px 8px; border-radius:10px; font-size:12px; }
+  table.perfil-txs, table.perfil-horas{ width:100%; border-collapse:collapse; }
+  table.perfil-txs th, table.perfil-txs td, table.perfil-horas th, table.perfil-horas td{ padding:8px; border-bottom:1px solid #eee; text-align:left; }
+  table.perfil-txs th, table.perfil-horas th{ background:#fafafa; }
+
+  /* Subtabla de detalles de horas */
+  .detalle-row td{ background:#fbfdff; }
+  .subtabla{ width:100%; border-collapse:collapse; }
+  .subtabla th, .subtabla td{ padding:8px; border-bottom:1px solid #eef2f7; text-align:left; }
+  .subtabla th{ background:#f8fafc; color:#334155; }
+
+  /* Modal genérico */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:1000; }
+  .modal-overlay.open{ display:flex; }
+  .modal{ width:min(900px, 92vw); max-height:88vh; overflow:auto; background:#fff; border-radius:10px; box-shadow:0 10px 35px rgba(0,0,0,.25); }
+  .modal-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #eee; }
+  .modal-title{ margin:0; font-size:18px; font-weight:700; }
+  .modal-body{ padding:14px 16px; }
+  .btn-close{ border:none; background:transparent; font-size:22px; line-height:1; cursor:pointer; color:#666; }
+
+  /* Botón "Ver" como link */
+  .btn-link { border:none; background:transparent; color:#2c7be5; cursor:pointer; font-weight:600; padding:0; }
+  .btn-link:hover { text-decoration:underline; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="perfil-header">
+  <div class="perfil-icon">👤</div>
+  <h1 class="perfil-title">Perfil de usuario</h1>
+</div>
+
+<p>Seleccioná el área a la que querés acceder:</p>
+
+<div class="grid-accesos">
+  {# ECONOMÍA #}
+  {% if perms.proyectos.can_manage_economia or perms.economia.view_dashboard %}
+  <div class="acceso">
+    <a class="acc-link" href="{% url 'economia:dashboard' %}">
+      <span class="acc-icon" aria-hidden="true">💰</span>
+      <span class="acc-text">
+        <span class="acc-title">Economía</span>
+        <span class="acc-desc">Panel de Economía.</span>
+      </span>
+    </a>
+  </div>
+  {% endif %}
+
+  {# Carga de transacción/gasto #}
+  {% if perms.proyectos.can_manage_economia or perms.economia.can_add_ingresos or perms.economia.add_transaccion or perms.economia.can_add_gastos or perms.economia.add_gasto %}
+  <div class="acceso">
+    <button type="button" class="acc-link" id="btnNuevaTransaccion">
+      <span class="acc-icon" aria-hidden="true">🧾</span>
+      <span class="acc-text">
+        <span class="acc-title">
+          {% if perms.proyectos.can_manage_economia or perms.economia.view_dashboard %}
+            {% if perms.economia.can_add_ingresos or perms.economia.add_transaccion %}
+              Nueva Transacción
+            {% else %}
+              Nuevo Gasto
+            {% endif %}
+          {% else %}
+            Nuevo Gasto
+          {% endif %}
+        </span>
+        <span class="acc-desc">
+          {% if perms.proyectos.can_manage_economia or perms.economia.view_dashboard %}
+            {% if perms.economia.can_add_ingresos or perms.economia.add_transaccion %}
+              Registrar ingresos o gastos.
+            {% else %}
+              Registrar un gasto.
+            {% endif %}
+          {% else %}
+            Registrar un gasto.
+          {% endif %}
+        </span>
+      </span>
+    </button>
+  </div>
+  {% endif %}
+
+  {% if perms.proyectos.view_proyecto %}
+  <div class="acceso">
+    <a class="acc-link" href="{% url 'proyectos:dashboard' %}">
+      <span class="acc-icon" aria-hidden="true">📋</span>
+      <span class="acc-text">
+        <span class="acc-title">Proyectos</span>
+        <span class="acc-desc">Ver y gestionar los proyectos.</span>
+      </span>
+    </a>
+  </div>
+  {% endif %}
+
+  <div class="acceso">
+    <button type="button" class="acc-link" id="btnCargarHoras">
+      <span class="acc-icon" aria-hidden="true">⏱️</span>
+      <span class="acc-text">
+        <span class="acc-title">Cargar horas</span>
+        <span class="acc-desc">Registrá tus horas de trabajo.</span>
+      </span>
+    </button>
+  </div>
+</div>
+
+<h2>Mis transacciones enviadas (pendientes)</h2>
+{% if mis_pendientes %}
+  <table class="perfil-txs">
+    <thead><tr><th>Fecha</th><th>Importe</th><th>Descripción</th><th>Estado</th><th>Editar</th></tr></thead>
+    <tbody>
+      {% for t in mis_pendientes %}
+        <tr>
+          <td>{{ t.fecha|date:"d/m/Y" }}</td>
+          <td>${{ t.monto }}</td>
+          <td>{{ t.descripcion }}</td>
+          <td><span class="badge-enviada">Enviada</span></td>
+          <td>
+            {% if perms.economia.can_edit_own_transactions and t.estado == 'pendiente' and t.usuario_id == request.user.id %}
+              <a href="{% url 'economia:tx_mia_editar' t.id %}">Editar</a>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No tenés transacciones pendientes.</p>
+{% endif %}
+
+<h2 style="margin-top:28px">Mis horas</h2>
+
+{% if mis_horas_grouped %}
+  <table class="perfil-horas">
+    <thead>
+      <tr>
+        <th>Proyecto / Área</th>
+        <th>Última fecha</th>
+        <th>Total horas</th>
+        <th>Reg.</th>
+        <th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in mis_horas_grouped %}
+        <tr>
+          <td>{{ g.grupo_nombre }}</td>
+          <td>{{ g.ultima|date:"d/m/Y"|default:"—" }}</td>
+          <td>{{ g.total_horas }}</td>
+          <td>{{ g.n_reg }}</td>
+          <td>
+            <button type="button"
+                    class="btn-link js-ver-detalles"
+                    data-pid="{{ g.pid }}">Ver</button>
+          </td>
+        </tr>
+
+        {# fila de detalles expandible por grupo #}
+        <tr id="det-{{ g.pid }}" class="detalle-row" style="display:none">
+          <td colspan="5">
+            <table class="subtabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Horas</th>
+                  <th>Proyecto/Área</th>
+                  <th>Tarea</th>
+                  <th>Estado</th>
+                  <th>Descripción</th>
+                </tr>
+              </thead>
+              <tbody>
+              {% for h in mis_horas %}
+                {% with pid=h.proyecto_id|default_if_none:0 %}
+                  {% if pid == g.pid %}
+                    <tr>
+                      <td>{{ h.fecha|date:"d/m/Y" }}</td>
+                      <td>{{ h.horas }}</td>
+                      <td>{{ h.proyecto.nombre|default:"—" }}</td>
+                      <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
+                      <td>{{ h.get_estado_display }}</td>
+                      <td>{{ h.descripcion|default:"" }}</td>
+                    </tr>
+                  {% endif %}
+                {% endwith %}
+              {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% elif mis_horas %}
+  {# Fallback: listado plano si no vino el agrupado #}
+  <table class="perfil-horas">
+    <thead><tr><th>Fecha</th><th>Horas</th><th>Proyecto/Area</th><th>Tarea</th><th>Estado</th><th>Descripción</th></tr></thead>
+    <tbody>
+      {% for h in mis_horas %}
+        <tr>
+          <td>{{ h.fecha|date:"d/m/Y" }}</td>
+          <td>{{ h.horas }}</td>
+          <td>{{ h.proyecto.nombre|default:"—" }}</td>
+          <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
+          <td>{{ h.get_estado_display }}</td>
+          <td>{{ h.descripcion|default:"" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>Aún no cargaste horas.</p>
+{% endif %}
+
+{# ===================== Modal TRANSACCIÓN ===================== #}
+<div class="modal-overlay" id="modalTransaccion" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTransaccionTitle">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalTransaccionTitle">
+        {% if perms.proyectos.can_manage_economia or perms.economia.view_dashboard %}
+          {% if perms.economia.can_add_ingresos or perms.economia.add_transaccion %}
+            Nueva Transacción
+          {% else %}
+            Nuevo Gasto
+          {% endif %}
+        {% else %}
+          Nuevo Gasto
+        {% endif %}
+      </h3>
+      <button type="button" class="btn-close" id="closeModal" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalFormContainer"><p style="margin:0;color:#666">Cargando formulario…</p></div>
+    </div>
+  </div>
+</div>
+
+{# ===================== Modal HORAS ===================== #}
+<div class="modal-overlay" id="modalHoras" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalHorasTitle">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modalHorasTitle">Cargar horas</h3>
+      <button type="button" class="btn-close" id="closeModalHoras" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="modalHorasContainer"><p style="margin:0;color:#666">Cargando formulario…</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Helper CSRF */
+function getCookie(name){
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? m.pop() : '';
+}
+
+/* Toggle de detalles en "Mis horas" (agrupado) */
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('.js-ver-detalles');
+  if(!btn) return;
+  const pid = btn.dataset.pid;
+  const row = document.getElementById('det-' + pid);
+  if(!row) return;
+  const visible = row.style.display !== 'none';
+  row.style.display = visible ? 'none' : 'table-row';
+  btn.textContent = visible ? 'Ver' : 'Ocultar';
+});
+
+/* ===== Modal “Nueva Transacción / Nuevo Gasto” ===== */
+(function(){
+  const btnOpen = document.getElementById('btnNuevaTransaccion');
+  const overlay = document.getElementById('modalTransaccion');
+  const btnClose = document.getElementById('closeModal');
+  const container = document.getElementById('modalFormContainer');
+  const URL_FORM = "{% url 'economia:nuevo' %}";
+
+  function openModal(){
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
+    fetch(URL_FORM, {headers: {'X-Requested-With':'XMLHttpRequest'}})
+      .then(r => r.text())
+      .then(html => { container.innerHTML = html; })
+      .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });
+  }
+  function closeModal(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+  if (btnOpen) btnOpen.addEventListener('click', openModal);
+  btnClose.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+})();
+
+/* ===== Modal “Cargar horas” (AJAX) ===== */
+(function(){
+  const URL_HORAS = "{% url 'proyectos:horas_nueva' %}";
+  const btnOpen = document.getElementById('btnCargarHoras');
+  const overlay = document.getElementById('modalHoras');
+  const btnClose = document.getElementById('closeModalHoras');
+  const container = document.getElementById('modalHorasContainer');
+
+  function openModal(){
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
+    fetch(URL_HORAS, {headers: {'X-Requested-With':'XMLHttpRequest'}})
+      .then(r => r.text())
+      .then(html => { container.innerHTML = html; attachFormHandler(); })
+      .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });
+  }
+  function closeModal(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+
+  function attachFormHandler(){
+    const form = container.querySelector('#formHoras');
+    const btnCancel = container.querySelector('#btnCancelarHoras');
+    const btnHoy = container.querySelector('#btnHoy');
+
+    if (btnCancel) btnCancel.addEventListener('click', closeModal);
+    if (btnHoy) {
+      btnHoy.addEventListener('click', function(){
+        const hoyISO = new Date().toISOString().split('T')[0];
+        const inputFecha = container.querySelector('#id_fecha');
+        if (inputFecha) inputFecha.value = hoyISO;
+      });
+    }
+    if (!form) return;
+
+    function parseHM(v){
+      const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec((v||'').trim());
+      if (!m) return null;
+      return parseInt(m[1],10)*60 + parseInt(m[2],10);
+    }
+
+    form.addEventListener('submit', async function(e){
+      const inicioInp = container.querySelector('#id_inicio');
+      const finInp    = container.querySelector('#id_fin');
+
+      const minIni = parseHM(inicioInp && inicioInp.value);
+      const minFin = parseHM(finInp && finInp.value);
+
+      if (minIni === null || minFin === null){
+        e.preventDefault();
+        alert('Usá formato 24 h HH:MM (ej.: 08:30).');
+        return false;
+      }
+      if (!(minIni < minFin)){
+        e.preventDefault();
+        alert('La hora de inicio debe ser anterior a la hora de fin (mismo día).');
+        return false;
+      }
+
+      // Enviar por AJAX robusto
+      e.preventDefault();
+      const formData = new FormData(form);
+      const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+
+      try{
+        const r = await fetch(form.action, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrf
+          },
+          body: formData
+        });
+
+        const text = await r.text();
+        let data = null;
+        try { data = JSON.parse(text); } catch (_) {}
+
+        if (data) {
+          if (data.ok) {
+            closeModal();
+            alert('Horas registradas correctamente.');
+            location.reload();
+            return;
+          }
+          if (data.html) {
+            container.innerHTML = data.html;
+            attachFormHandler();
+            return;
+          }
+          alert('Error al guardar.');
+          return;
+        }
+
+        if (text.trim().startsWith('<')) {
+          container.innerHTML = text;
+          attachFormHandler();
+          return;
+        }
+
+        alert('Ocurrió un error inesperado al guardar.');
+      } catch(err){
+        console.error(err);
+        alert('Error de red al guardar.');
+      }
+    });
+  }
+
+  if (btnOpen) btnOpen.addEventListener('click', openModal);
+  btnClose.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+})();
+</script>
+{% endblock %}

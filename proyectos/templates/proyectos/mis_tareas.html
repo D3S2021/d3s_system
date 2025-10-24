@@ -1,0 +1,127 @@
+{% extends "_base.html" %}
+{% block title %}Mis tareas{% endblock %}
+{% block content %}
+<h1>Mis tareas</h1>
+
+<div style="display:flex;gap:8px;margin:10px 0 14px;flex-wrap:wrap">
+  <a href="#vencidas">🔴 Vencidas ({{ vencidas|length }})</a>
+  <a href="#hoy">🟡 Hoy ({{ hoy_lista|length }})</a>
+  <a href="#prox">🟢 Próximas ({{ proximas|length }})</a>
+  <a href="#sinfecha">⚪ Sin fecha ({{ sin_fecha|length }})</a>
+</div>
+
+{% macro fila(t) %}{% endmacro %}
+
+<h3 id="vencidas">🔴 Vencidas</h3>
+{% if vencidas %}
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Tarea</th><th>Proyecto</th><th>Vence</th><th>Prioridad</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for t in vencidas %}
+        <tr>
+          <td>{{ t.titulo }}</td>
+          <td>
+            {% if perms.proyectos.can_manage_proyectos %}
+              <a href="{% url 'proyectos:detalle' t.proyecto_id %}">{{ t.proyecto.nombre }}</a>
+            {% else %}
+              {{ t.proyecto.nombre }}
+            {% endif %}
+          </td>
+          <td><b style="color:#9f1c1c">{{ t.vence_el|date:"d/m/Y" }}</b></td>
+          <td>{{ t.get_prioridad_display }}</td>
+          <td>
+            <form method="post" action="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+              {% csrf_token %}
+              <select name="estado" onchange="this.form.submit()">
+                {% for k,v in t.ESTADOS %}
+                  <option value="{{ k }}" {% if t.estado == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}<p>—</p>{% endif %}
+
+<h3 id="hoy">🟡 Vence hoy</h3>
+{% if hoy_lista %}
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Tarea</th><th>Proyecto</th><th>Vence</th><th>Prioridad</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for t in hoy_lista %}
+        <tr>
+          <td>{{ t.titulo }}</td>
+          <td>{% if perms.proyectos.can_manage_proyectos %}<a href="{% url 'proyectos:detalle' t.proyecto_id %}">{{ t.proyecto.nombre }}</a>{% else %}{{ t.proyecto.nombre }}{% endif %}</td>
+          <td><b>{{ t.vence_el|date:"d/m/Y" }}</b></td>
+          <td>{{ t.get_prioridad_display }}</td>
+          <td>
+            <form method="post" action="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+              {% csrf_token %}
+              <select name="estado" onchange="this.form.submit()">
+                {% for k,v in t.ESTADOS %}
+                  <option value="{{ k }}" {% if t.estado == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}<p>—</p>{% endif %}
+
+<h3 id="prox">🟢 Próximas</h3>
+{% if proximas %}
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Tarea</th><th>Proyecto</th><th>Vence</th><th>Prioridad</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for t in proximas %}
+        <tr>
+          <td>{{ t.titulo }}</td>
+          <td>{% if perms.proyectos.can_manage_proyectos %}<a href="{% url 'proyectos:detalle' t.proyecto_id %}">{{ t.proyecto.nombre }}</a>{% else %}{{ t.proyecto.nombre }}{% endif %}</td>
+          <td>{{ t.vence_el|date:"d/m/Y" }}</td>
+          <td>{{ t.get_prioridad_display }}</td>
+          <td>
+            <form method="post" action="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+              {% csrf_token %}
+              <select name="estado" onchange="this.form.submit()">
+                {% for k,v in t.ESTADOS %}
+                  <option value="{{ k }}" {% if t.estado == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}<p>—</p>{% endif %}
+
+<h3 id="sinfecha">⚪ Sin fecha</h3>
+{% if sin_fecha %}
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Tarea</th><th>Proyecto</th><th>Prioridad</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for t in sin_fecha %}
+        <tr>
+          <td>{{ t.titulo }}</td>
+          <td>{% if perms.proyectos.can_manage_proyectos %}<a href="{% url 'proyectos:detalle' t.proyecto_id %}">{{ t.proyecto.nombre }}</a>{% else %}{{ t.proyecto.nombre }}{% endif %}</td>
+          <td>{{ t.get_prioridad_display }}</td>
+          <td>
+            <form method="post" action="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+              {% csrf_token %}
+              <select name="estado" onchange="this.form.submit()">
+                {% for k,v in t.ESTADOS %}
+                  <option value="{{ k }}" {% if t.estado == k %}selected{% endif %}>{{ v }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}<p>—</p>{% endif %}
+{% endblock %}

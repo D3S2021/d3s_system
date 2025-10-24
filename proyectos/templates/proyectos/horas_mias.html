@@ -1,0 +1,50 @@
+{% extends "_base.html" %}
+{% block title %}Mis horas{% endblock %}
+
+{% block content %}
+<h1>{{ titulo }}</h1>
+
+<style>
+  .tabla-horas { width:100%; border-collapse:collapse; margin-top:8px; }
+  .tabla-horas th, .tabla-horas td { padding:10px 12px; border-top:1px solid #e5e7eb; }
+  .tabla-horas th { text-align:left; font-weight:700; color:#334155; background:#f8fafc; }
+  .tabla-horas tr:hover td { background:#fbfdff; }
+  .btn-sm{ display:inline-block; padding:6px 10px; border:1px solid #d0d7de; border-radius:8px; background:#fff; }
+  .btn-sm:hover{ background:#f8fafc; }
+</style>
+
+<table class="tabla-horas">
+  <thead>
+    <tr>
+      <th style="width:46%">Proyecto / Área</th>
+      <th style="width:18%">Última fecha</th>
+      <th style="width:18%">Total horas</th>
+      <th style="width:10%">Reg.</th>
+      <th style="width:8%"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for g in agrupado %}
+      <tr>
+        <td>
+          {% if g.pid %}
+            <a href="{% url 'proyectos:detalle' g.pid %}">{{ g.grupo_nombre }}</a>
+          {% else %}
+            {{ g.grupo_nombre }}
+          {% endif %}
+        </td>
+        <td>{{ g.ultima|date:"d/m/Y"|default:"—" }}</td>
+        <td>{{ g.total_horas|floatformat:2 }}</td>
+        <td>{{ g.n_reg }}</td>
+        <td>
+          {% if g.pid %}
+            <a class="btn-sm" href="{% url 'proyectos:detalle' g.pid %}">Ver</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" style="color:#64748b">No tenés horas cargadas.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

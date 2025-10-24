@@ -1,0 +1,13 @@
+{% extends "proyectos/_base_proyectos.html" %}
+{% block title %}Cerrar (facturación incompleta) · {{ proyecto.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Cerrar proyecto con facturación incompleta</h1>
+<p>El total facturado no alcanza el presupuesto del proyecto. Si necesitás cerrar igual, **ingresá un motivo**.</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Cerrar de todos modos</button>
+  <a href="{% url 'proyectos:detalle' proyecto.id %}">Cancelar</a>
+</form>
+{% endblock %}

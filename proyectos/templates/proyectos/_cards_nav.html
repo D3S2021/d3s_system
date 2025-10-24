@@ -1,0 +1,54 @@
+{# templates/proyectos/_cards_nav.html #}
+<style>
+  .cards-row{
+    display:grid;
+    grid-template-columns:repeat(6,1fr); /* 6 tarjetas: vencimientos + 4 estados + todos */
+    gap:12px;
+    margin-bottom:16px
+  }
+  .card-link{
+    display:block;border:1px solid #e5e5e5;border-radius:10px;background:#fff;
+    padding:16px;text-decoration:none;color:inherit
+  }
+  .card-link h3{margin:0 0 8px;font-size:14px;color:#555}
+  .card-link .num{font-size:34px;font-weight:700;color:#1a73e8;line-height:1}
+  .card-link.active{outline:2px solid #1a73e8;background:#f6faff}
+</style>
+
+<div class="cards-row">
+  <a class="card-link {% if current_tab == 'vencimientos' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=vencimientos">
+    <h3>Próximos vencimientos</h3>
+    <div class="num">{{ counts.vencimientos|default:"0" }}</div>
+  </a>
+
+  <a class="card-link {% if current_tab == 'planificados' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=planificados">
+    <h3>Planificados</h3>
+    <div class="num">{{ counts.planificados|default:"0" }}</div>
+  </a>
+
+  <a class="card-link {% if current_tab == 'presupuestados' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=presupuestados">
+    <h3>Presupuestados</h3>
+    <div class="num">{{ counts.presupuestados|default:"0" }}</div>
+  </a>
+
+  <a class="card-link {% if current_tab == 'en_progreso' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=en_progreso">
+    <h3>En progreso</h3>
+    <div class="num">{{ counts.en_progreso|default:"0" }}</div>
+  </a>
+
+  <a class="card-link {% if current_tab == 'finalizados' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=finalizados">
+    <h3>Finalizados</h3>
+    <div class="num">{{ counts.finalizados|default:"0" }}</div>
+  </a>
+
+  <a class="card-link {% if current_tab == 'todos' %}active{% endif %}"
+     href="{% url 'proyectos:dashboard' %}?tab=todos">
+    <h3>Todos los proyectos</h3>
+    <div class="num">→</div>
+  </a>
+</div>

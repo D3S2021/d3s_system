@@ -1,0 +1,136 @@
+{# templates/proyectos/_vencimientos_table.html #}
+<style>
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:9999;
+  }
+  .modal-card{
+    width:min(760px, 92vw); background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+  }
+  .modal-hdr{ padding:14px 16px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between }
+  .modal-bdy{ padding:16px }
+  .btn{ display:inline-block; padding:6px 10px; border:1px solid #d0d7de; border-radius:6px; background:#f6f8fa; text-decoration:none; cursor:pointer }
+  .btn.primary{ background:#2c7be5; color:#fff; border-color:#2c7be5 }
+  .badge-over{ color:#9f1c1c; font-weight:600 }
+  .muted{ color:#666 }
+</style>
+
+<table class="tabla" style="width:100%;border-collapse:collapse">
+  <thead>
+    <tr>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Tarea</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Encargado</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Vence</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Proyecto</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Responsable</th>
+      <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Detalle</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% if vencimientos %}
+      {% for t in vencimientos %}
+        <tr>
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">{{ t.titulo }}</td>
+
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">
+            {% if t.asignado_a %}
+              {{ t.asignado_a.get_full_name|default:t.asignado_a.username }}
+            {% else %}—{% endif %}
+          </td>
+
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">
+            {% if t.vence_el %}
+              {% if hoy and t.vence_el < hoy %}
+                <span class="badge-over">{{ t.vence_el|date:"d/m/Y" }}</span>
+              {% else %}
+                {{ t.vence_el|date:"d/m/Y" }}
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">
+            <a href="{% url 'proyectos:detalle' t.proyecto_id %}">{{ t.proyecto.nombre }}</a>
+          </td>
+
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">
+            {% if t.proyecto.responsable %}
+              {{ t.proyecto.responsable.get_full_name|default:t.proyecto.responsable.username }}
+            {% else %}—{% endif %}
+          </td>
+
+          <td style="padding:8px;border-bottom:1px solid #f3f3f3">
+            <button
+              class="btn"
+              onclick="openTaskModal(this)"
+              data-titulo="{{ t.titulo|escape }}"
+              data-descripcion="{{ t.descripcion|default_if_none:''|linebreaksbr }}"
+              data-proyecto="{{ t.proyecto.nombre|escape }}"
+              data-proyecto-url="{% url 'proyectos:detalle' t.proyecto_id %}"
+              data-estado="{{ t.get_estado_display }}"
+              data-prioridad="{{ t.get_prioridad_display }}"
+              data-vence="{% if t.vence_el %}{{ t.vence_el|date:'d/m/Y' }}{% else %}—{% endif %}"
+              data-asignado="{% if t.asignado_a %}{{ t.asignado_a.get_full_name|default:t.asignado_a.username }}{% else %}—{% endif %}"
+            >Ver</button>
+          </td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr>
+        <td colspan="6" style="padding:10px;color:#666">No hay vencimientos.</td>
+      </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{# ---- Modal de Detalle ---- #}
+<div id="taskModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <div id="mTitulo" style="font-weight:700"></div>
+      <button class="btn" onclick="closeTaskModal()">Cerrar</button>
+    </div>
+    <div class="modal-bdy">
+      <div class="muted" style="margin-bottom:8px">
+        Proyecto: <a id="mProyectoLink" href="#" target="_blank"><span id="mProyecto"></span></a>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px">
+        <div><b>Encargado:</b> <span id="mAsignado"></span></div>
+        <div><b>Vence:</b> <span id="mVence"></span></div>
+        <div><b>Estado:</b> <span id="mEstado"></span></div>
+        <div><b>Prioridad:</b> <span id="mPrioridad"></span></div>
+      </div>
+      <div>
+        <b>Descripción</b>
+        <div id="mDescripcion" class="muted" style="margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openTaskModal(btn){
+    const m = document.getElementById('taskModal');
+    document.getElementById('mTitulo').textContent = btn.dataset.titulo || '(sin título)';
+    document.getElementById('mProyecto').textContent = btn.dataset.proyecto || '';
+    document.getElementById('mProyectoLink').href = btn.dataset.proyectoUrl || '#';
+    document.getElementById('mAsignado').textContent = btn.dataset.asignado || '—';
+    document.getElementById('mVence').textContent = btn.dataset.vence || '—';
+    document.getElementById('mEstado').textContent = btn.dataset.estado || '—';
+    document.getElementById('mPrioridad').textContent = btn.dataset.prioridad || '—';
+    document.getElementById('mDescripcion').innerHTML = btn.dataset.descripcion || '<span class="muted">Sin descripción.</span>';
+    m.style.display = 'flex';
+    m.setAttribute('aria-hidden', 'false');
+  }
+  function closeTaskModal(){
+    const m = document.getElementById('taskModal');
+    m.style.display = 'none';
+    m.setAttribute('aria-hidden', 'true');
+  }
+  // Cerrar con backdrop click
+  document.getElementById('taskModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'taskModal'){ closeTaskModal(); }
+  });
+  // Esc
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){ closeTaskModal(); }
+  });
+</script>

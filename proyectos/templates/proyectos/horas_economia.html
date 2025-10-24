@@ -1,0 +1,50 @@
+{# templates/proyectos/horas_economia.html #}
+{% extends "_base.html" %}
+{% block title %}{{ titulo|default:"Horas de trabajo" }}{% endblock %}
+
+{% block content %}
+<h1>{{ titulo|default:"Horas de trabajo" }}</h1>
+
+<div style="margin:10px 0">
+  <a class="btn {% if estado == 'todas' %}btn-primary{% endif %}" href="{% url 'proyectos:horas_economia' %}?estado=todas">Todas</a>
+  <a class="btn {% if estado == 'cargada' %}btn-primary{% endif %}" href="?estado=cargada">Cargadas</a>
+  <a class="btn {% if estado == 'aprobada' %}btn-primary{% endif %}" href="?estado=aprobada">Aprobadas</a>
+  <a class="btn {% if estado == 'rechazada' %}btn-primary{% endif %}" href="?estado=rechazada">Rechazadas</a>
+</div>
+
+<table class="tabla" style="width:100%;border-collapse:collapse">
+  <thead>
+    <tr>
+      <th>Usuario</th>
+      <th>Fecha</th>
+      <th>Horas</th>
+      <th>Proyecto/Area</th>
+      <th>Tarea</th>
+      <th>Estado</th>
+      <th style="width:180px">Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for h in items %}
+      <tr>
+        <td>{{ h.usuario.get_full_name|default:h.usuario.username }}</td>
+        <td>{{ h.fecha|date:"d/m/Y" }}</td>
+        <td>{{ h.horas }}</td>
+        <td>{% if h.proyecto %}<a href="{% url 'proyectos:detalle' h.proyecto_id %}">{{ h.proyecto.nombre }}</a>{% else %}—{% endif %}</td>
+        <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
+        <td>{{ h.get_estado_display }}</td>
+        <td>
+          {% if h.estado == "cargada" %}
+            <a class="btn btn-small" href="{% url 'proyectos:horas_aprobar' h.id %}">Aprobar</a>
+            <a class="btn btn-small" href="{% url 'proyectos:horas_rechazar' h.id %}">Rechazar</a>
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7">No hay horas.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

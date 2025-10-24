@@ -1,0 +1,41 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Resumen de Economía{% endblock %}
+
+{% block content_adminlike %}
+<h1>{{ month }}/{{ year|stringformat:"s" }}</h1>
+
+<div class="cards">
+  <div class="card">
+    <div class="k">Ingresos</div>
+    <div class="number">${{ total_ingresos }}</div>
+  </div>
+  <div class="card">
+    <div class="k">Gastos</div>
+    <div class="number">${{ total_gastos }}</div>
+  </div>
+  <div class="card">
+    <div class="k">Saldo</div>
+    <div class="number">${{ saldo }}</div>
+  </div>
+</div>
+
+<h3>Últimas transacciones aprobadas</h3>
+<table>
+  <thead>
+    <tr><th>Fecha</th><th>Usuario</th><th>Categoría</th><th>Tipo</th><th>Monto</th></tr>
+  </thead>
+  <tbody>
+  {% for t in ultimas %}
+    <tr>
+      <td>{{ t.fecha }}</td>
+      <td>{{ t.usuario.username|default:"-" }}</td>
+      <td>{{ t.categoria.nombre }}</td>
+      <td>{{ t.categoria.tipo }}</td>
+      <td>${{ t.monto }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5">Sin movimientos</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

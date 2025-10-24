@@ -1,0 +1,19 @@
+<form method="post" action="{% url 'perfil_editar_modal' %}">
+  {% csrf_token %}
+  <div style="display:grid; gap:10px;">
+    <div>
+      <label>Nombre</label>
+      {{ form.first_name }}
+      {% for e in form.first_name.errors %}<div style="color:#b42318">{{ e }}</div>{% endfor %}
+    </div>
+    <div>
+      <label>Apellido</label>
+      {{ form.last_name }}
+      {% for e in form.last_name.errors %}<div style="color:#b42318">{{ e }}</div>{% endfor %}
+    </div>
+  </div>
+  <div style="margin-top:12px; text-align:right;">
+    <button type="button" class="btn btn-secondary" data-cancel>Cancelar</button>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>

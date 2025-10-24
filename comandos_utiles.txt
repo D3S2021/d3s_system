@@ -1,0 +1,22 @@
+# 📋 Comandos útiles Django (Sistema D3S)
+
+.venv\Scripts\activate       # Activa el entorno virtual (siempre antes de trabajar)
+deactivate                     # Desactiva el entorno virtual
+
+python manage.py runserver     # Levanta el servidor local (http://127.0.0.1:8000/)
+
+python manage.py shell         # Abre la consola interactiva de Django (ejecutar código rápido)
+
+python manage.py makemigrations   # Detecta cambios en los modelos y crea migraciones
+python manage.py migrate          # Aplica las migraciones a la base de datos
+
+python manage.py createsuperuser  # Crea un superusuario (admin del sistema)
+
+pip install nombre_libreria       # Instala una librería nueva en el proyecto
+pip freeze > requirements.txt     # Actualiza el listado de dependencias del proyecto
+
+git add .                         # Prepara todos los cambios para guardarlos
+git commit -m "mensaje"           # Guarda los cambios en Git con un mensaje
+git push origin main              # Sube los cambios a GitHub (Render despliega)
+
+python manage.py collectstatic    # Junta todos los archivos estáticos (usar antes de producción)

@@ -1,0 +1,92 @@
+{# templates/economia/_form_transaccion.html #}
+<form method="post" action="{% url 'economia:nuevo' %}">
+  {% csrf_token %}
+
+  <p>
+    {{ form.categoria.label_tag }}
+    {{ form.categoria }}
+  </p>
+
+  <p>
+    {{ form.fecha.label_tag }}
+    {{ form.fecha }}
+    <button
+      type="button"
+      class="btn-mini-chip"
+      id="btnHoy"
+      onclick="(function(){
+        var input=document.querySelector('input[name=&quot;{{ form.fecha.name }}&quot;]');
+        if(!input) return;
+        var d=new Date();
+        var yyyy=d.getFullYear();
+        var mm=('0'+(d.getMonth()+1)).slice(-2);
+        var dd=('0'+d.getDate()).slice(-2);
+        input.value=yyyy+'-'+mm+'-'+dd;   // ISO para <input type=date>
+        try{ input.dispatchEvent(new Event('change')); }catch(e){}
+      })();"
+    >Hoy</button>
+  </p>
+
+  <p>
+    {{ form.monto.label_tag }}
+    {# Input manual para poder formatear como ARS y limpiar en submit #}
+    <input
+      type="text"
+      name="{{ form.monto.name }}"
+      id="id_monto"
+      class="vTextField"
+      inputmode="decimal"
+      placeholder="$ 0,00"
+      value="{{ form.monto.value|default:'' }}"
+      onfocus="(function(el){
+        // Al enfocar, quitar símbolos/espacios para editar el número crudo
+        var v = el.value || '';
+        el.value = v.replace(/[^0-9,.-]/g,'');
+      })(this)"
+      onblur="(function(el){
+        // Al salir, mostrar como moneda ARS
+        var v = (el.value||'').trim();
+        if(!v){ el.value=''; return; }
+        var n = parseFloat(v.replace(/\./g,'').replace(',','.'));
+        if(!isNaN(n)){
+          try{
+            el.value = new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',minimumFractionDigits:2}).format(n);
+          }catch(e){ el.value = v; }
+        }
+      })(this)"
+    />
+  </p>
+
+  <p>
+    {{ form.descripcion.label_tag }}
+    {{ form.descripcion }}
+  </p>
+
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+    <button
+      type="submit"
+      class="btn btn-success"
+      onclick="(function(btn){
+        // Antes de enviar, normalizar monto a número simple (1234.56)
+        var form = btn.closest('form');
+        var el = form && form.querySelector('#id_monto');
+        if(!el) return;
+        var v = (el.value||'').trim();
+        if(!v) return;
+        var n = parseFloat(v.replace(/[^0-9,,-.]/g,'').replace(/\./g,'').replace(',','.'));
+        if(!isNaN(n)){ el.value = String(n); }
+      })(this)"
+    >Guardar</button>
+    <button type="button" class="btn" onclick="document.getElementById('modalTransaccion').classList.remove('open')">
+      Cancelar
+    </button>
+  </div>
+</form>
+
+<style>
+  .btn-mini-chip{
+    font-size:12px; line-height:1; padding:3px 8px;
+    border:1px solid #e5e5e5; border-radius:12px; background:#fafafa; cursor:pointer;
+    margin-left:8px; vertical-align:middle;
+  }
+</style>

@@ -1,0 +1,100 @@
+{% extends "economia/_base_adminlike.html" %}
+{% block title %}Cierre de caja{% endblock %}
+
+{% block content_adminlike %}
+
+<form method="get" style="margin-bottom:12px">
+  Mes:
+  <select name="month">
+    {% for m in months %}
+      <option value="{{ m }}" {% if month == m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  Año:
+  <input type="number" name="year" value="{{ year }}" style="width:90px" />
+  <button type="submit">Ver</button>
+</form>
+
+<div class="cards">
+  <div class="card">
+    <div class="k">Ingresos</div>
+    <div class="number">${{ total_ingresos }}</div>
+  </div>
+  <div class="card">
+    <div class="k">Gastos</div>
+    <div class="number">${{ total_gastos }}</div>
+  </div>
+  <div class="card">
+    <div class="k">Saldo</div>
+    <div class="number">${{ saldo }}</div>
+  </div>
+</div>
+
+<form method="post" style="margin-top:16px">
+  {% csrf_token %}
+  <button name="accion" value="descargar_pdf" class="default" disabled title="Próximamente">Descargar resumen (PDF)</button>
+  <!-- Más adelante: botón “Cerrar mes” real con persistencia -->
+</form>
+
+<hr style="margin:18px 0" />
+
+{# ====================== HORAS POR PERSONA Y PROYECTO ====================== #}
+<style>
+  .tabla-horas-cierre { width:100%; border-collapse:collapse; margin-top:8px; }
+  .tabla-horas-cierre th, .tabla-horas-cierre td { padding:8px 10px; border-bottom:1px solid #eee; text-align:left; }
+  .tabla-horas-cierre thead th { background:#fafafa; font-weight:600; }
+  .fila-total-persona td { font-weight:600; background:#fcfcfc; }
+  .subtle { color:#666; font-size:12px; }
+  .person-header {
+    display:flex; align-items:baseline; gap:8px; margin:14px 0 6px;
+  }
+</style>
+
+<div class="resumen-horas" style="display:flex; align-items:center; justify-content:space-between; margin:6px 0 4px;">
+  <h3 style="margin:0">Horas por persona y proyecto</h3>
+  <div class="subtle">Periodo: <strong>{{ month }}/{{ year }}</strong> — (solo <em>aprobadas</em>)</div>
+</div>
+
+{% if horas_por_persona %}
+  {% for p in horas_por_persona %}
+    <div class="person-header">
+      <h4 style="margin:0">{{ p.persona }}</h4>
+      <span class="subtle">@{{ p.username }}</span>
+    </div>
+
+    <table class="tabla-horas-cierre">
+      <thead>
+        <tr>
+          <th style="width:60%">Proyecto/Area</th>
+          <th style="width:20%">Horas</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in p.proyectos %}
+          <tr>
+            <td>
+              {% if it.proyecto_id %}
+                <a href="{% url 'proyectos:detalle' it.proyecto_id %}">{{ it.proyecto }}</a>
+              {% else %}
+                {{ it.proyecto|default:"—" }}
+              {% endif %}
+            </td>
+            <td>{{ it.horas|floatformat:2 }}</td>
+          </tr>
+        {% endfor %}
+        <tr class="fila-total-persona">
+          <td>Total {{ p.persona }}</td>
+          <td>{{ p.total_persona|floatformat:2 }}</td>
+        </tr>
+      </tbody>
+    </table>
+  {% endfor %}
+
+  <div style="text-align:right; margin-top:10px;">
+    <strong>Total general de horas ({{ month }}/{{ year }}): {{ total_horas_general|floatformat:2 }}</strong>
+  </div>
+{% else %}
+  <p style="margin:10px 0">No hay horas aprobadas para el período seleccionado.</p>
+{% endif %}
+
+{% endblock %}

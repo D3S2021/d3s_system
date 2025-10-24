@@ -1,0 +1,65 @@
+{# templates/proyectos/_tarea_detalle.html #}
+<style>
+  .tarea-det { display:grid; gap:10px; }
+  .tarea-det .row { display:grid; grid-template-columns: 160px 1fr; gap:10px; align-items:start; }
+  .tarea-det .lbl { font-weight:700; color:#334155; }
+  .tarea-det .val { color:#0f172a; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  .chip { background:#eef2ff; color:#1e40af; border-radius:999px; padding:2px 8px; font-weight:600; font-size:12px; }
+  .section-title { margin:10px 0 2px; font-weight:700; color:#1e293b; }
+  .muted { color:#64748b; }
+  .divider { height:1px; background:#e5e7eb; margin:8px 0; }
+</style>
+
+<div class="tarea-det">
+  <div class="row">
+    <div class="lbl">Título</div>
+    <div class="val">{{ t.titulo }}</div>
+  </div>
+
+  {% if t.descripcion %}
+    <div class="row">
+      <div class="lbl">Descripción</div>
+      <div class="val">{{ t.descripcion|linebreaksbr }}</div>
+    </div>
+  {% endif %}
+
+  <div class="row">
+    <div class="lbl">Proyecto</div>
+    <div class="val">{{ t.proyecto.nombre }}</div>
+  </div>
+
+  <div class="row">
+    <div class="lbl">Asignado a</div>
+    <div class="val">{% if t.asignado_a %}{{ t.asignado_a.get_full_name|default:t.asignado_a.username }}{% else %}—{% endif %}</div>
+  </div>
+
+  <div class="row">
+    <div class="lbl">Estado</div>
+    <div class="val chips">
+      <span class="chip">{{ t.get_estado_display }}</span>
+      <span class="chip muted">Prioridad: {{ t.get_prioridad_display }}</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="lbl">Vence el</div>
+    <div class="val">{% if t.vence_el %}{{ t.vence_el|date:"d/m/Y" }}{% else %}—{% endif %}</div>
+  </div>
+
+  {% if t.estimacion_horas %}
+    <div class="row">
+      <div class="lbl">Estimación</div>
+      <div class="val">{{ t.estimacion_horas }} h</div>
+    </div>
+  {% endif %}
+
+  <div class="divider"></div>
+
+  {# Si querés, mostrás un resumen de actividad (opcional) #}
+  <div class="section-title">Resumen</div>
+  <div class="muted">
+    Creada: {{ t.creado_en|date:"d/m/Y H:i" }} ·
+    Actualizada: {{ t.actualizado_en|date:"d/m/Y H:i" }}
+  </div>
+</div>

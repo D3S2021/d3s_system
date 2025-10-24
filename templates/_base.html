@@ -1,0 +1,300 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Sistema D3S{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  {% block extra_css %}{% endblock %}
+  <style>
+    /* ===== Notificaciones ===== */
+    .notif-badge{
+      position:absolute;top:-6px;right:-10px;
+      background:#d9534f;color:#fff;border-radius:10px;
+      padding:1px 6px;font-size:11px;line-height:1;
+    }
+    .notif-wrapper{ position:relative; }
+    .notif-btn{
+      appearance:none;border:0;background:transparent;cursor:pointer;
+      font-size:18px; line-height:1; position:relative; color:#fff;
+    }
+    .notif-dropdown{
+      display:none; position:absolute; top:24px; right:0;
+      width:320px; background:#fff; border:1px solid #ddd;
+      border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.15);
+      z-index:1000; color:#2c3e50;
+    }
+    .notif-dropdown.is-open{ display:block; }
+    .notif-dropdown header{
+      font-weight:600; padding:10px 12px;
+      border-bottom:1px solid #eee; background:#f8f9fa;
+      border-radius:8px 8px 0 0; color:#333;
+    }
+    .notif-dropdown ul{
+      list-style:none;margin:0;padding:0;max-height:320px;overflow-y:auto;
+    }
+    .notif-dropdown li{
+      padding:10px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;
+      color:#2c3e50;
+    }
+    .notif-dropdown li:last-child{ border-bottom:none; }
+    .notif-dropdown li a{ text-decoration:none;color:#2c3e50;display:block; }
+    .notif-dropdown li strong{ color:#000; }
+    .notif-dropdown li small{ display:block;color:#6b7a90;font-size:11px;margin-top:4px; }
+    .notif-dropdown .footer{
+      display:flex;justify-content:center;padding:10px 12px;border-top:1px solid #eee;
+      background:#fafafa;border-radius:0 0 8px 8px;
+    }
+    .notif-dropdown .footer a{
+      font-size:13px;font-weight:600;color:#2c7be5 !important;text-decoration:none !important;
+    }
+    .notif-dropdown .footer a:hover{ text-decoration:underline !important;color:#1b5cb8 !important; }
+
+    /* ===== Menú de usuario ===== */
+    .user-menu{ position:relative; display:inline-block; }
+    .user-btn{
+      background:transparent; border:0; color:#fff; font-weight:600;
+      cursor:pointer; padding:6px 8px; line-height:1;
+    }
+    .user-dd{
+      position:absolute;
+      right:0;
+      top:100%;
+      min-width:230px;
+      background:#fff;
+      border:1px solid #000000;
+      border-radius:10px;
+      box-shadow:0 10px 30px rgba(0,0,0,.12);
+      padding:6px 0;
+      display:none;
+      z-index:1000;
+      animation:fadeIn .15s ease;
+      overflow:hidden;  /* ✅ evita que el hover sobresalga */
+    }
+    .user-menu.open .user-dd{ display:block; }
+
+    .user-dd a, .user-dd button{
+      display:flex; align-items:center; gap:8px;
+      width:100%; text-align:left; padding:10px 14px;
+      color:#1e293b; text-decoration:none; border-radius:0;
+      background:transparent; border:0; cursor:pointer;
+      transition:background .15s, color .15s;
+      font-size:14px;
+    }
+    .user-dd a:hover, .user-dd button:hover{
+      background:#f1f5f9;
+      color:#0f172a;
+    }
+
+    .user-dd .divider{
+      border-top:1px solid #000000; margin:6px 0;
+    }
+
+    @keyframes fadeIn{
+      from{opacity:0; transform:translateY(-4px);}
+      to{opacity:1; transform:translateY(0);}
+    }
+
+    /* --- FIX: forzar color oscuro dentro del dropdown del usuario
+       (admin/base.css pinta #user-tools a blanco) --- */
+    #user-tools .user-dd a,
+    #user-tools .user-dd a:link,
+    #user-tools .user-dd a:visited{
+      color:#1e293b !important;
+    }
+    #user-tools .user-dd a:hover{
+      color:#0f172a !important;
+    }
+
+    /* ===== Modal ===== */
+    .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45);
+      display:none; align-items:center; justify-content:center; z-index:1200; }
+    .modal-overlay.open{ display:flex; }
+    .modal{
+      width:min(520px, 92vw); max-height:88vh; overflow:auto; background:#fff;
+      border-radius:12px; box-shadow:0 10px 35px rgba(0,0,0,.25);
+    }
+    .modal-header{ display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px; border-bottom:1px solid #eee; }
+    .modal-body{ padding:14px 16px; }
+    .modal-title{ margin:0; font-size:18px; font-weight:700; }
+    .btn-close{ border:none; background:transparent; font-size:22px; line-height:1; cursor:pointer; color:#666; }
+
+    /* ===== Mensajes ===== */
+    .messagelist{margin:10px 0 12px;padding:0;list-style:none}
+    .messagelist li{margin:8px 0;padding:8px 10px;border-radius:4px;border:1px solid transparent}
+    .msg-error{background:#fdecea;color:#b71c1c;border-color:#f5c6cb}
+    .msg-warning{background:#fff8e1;color:#8a6d3b;border-color:#ffeeba}
+    .msg-ok{background:#e8f5e9;color:#256029;border-color:#c3e6cb}
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div id="branding">
+        <h1 id="site-name" style="margin:0;">Sistema D3S</h1>
+      </div>
+
+      <div id="user-tools" style="display:flex;gap:16px;align-items:center;position:relative;">
+        {% if request.user.is_authenticated %}
+          <!-- 🔔 Campana -->
+          <div class="notif-wrapper">
+            <button type="button" class="notif-btn" id="notifBell" aria-haspopup="true" aria-expanded="false">
+              🔔
+              {% if noti_count %}
+                <span class="notif-badge">{{ noti_count }}</span>
+              {% endif %}
+            </button>
+
+            <div class="notif-dropdown" id="notifMenu" role="menu" aria-label="Notificaciones">
+              <header>Notificaciones</header>
+              <ul>
+                {% if noti_unread %}
+                  {% for n in noti_unread|slice:":10" %}
+                    <li>
+                      <a href="{{ n.url }}">
+                        <strong>{% firstof n.titulo n.cuerpo|truncatechars:60 "Notificación" %}</strong>
+                        <small>{{ n.creada|date:"d/m/Y H:i" }}</small>
+                      </a>
+                    </li>
+                  {% endfor %}
+                {% else %}
+                  <li><em>No tenés notificaciones nuevas</em></li>
+                {% endif %}
+              </ul>
+              <div class="footer">
+                <a href="{% url 'notificaciones:lista' %}">Ver todas las notificaciones</a>
+              </div>
+            </div>
+          </div>
+
+          <!-- ⚙️ Menú Usuario -->
+          <div class="user-menu" id="userMenu">
+            <button class="user-btn" type="button">
+              {{ request.user.get_full_name|default:request.user.username }} ▾
+            </button>
+            <div class="user-dd">
+              <button type="button" id="openEditName">✏️ Cambiar nombre</button>
+              <button type="button" id="openChangePwd">🔑 Cambiar contraseña</button>
+              <div class="divider"></div>
+              <a href="{% url 'perfil' %}">👤 Ir a mi perfil</a>
+              <a href="{% url 'logout' %}">🚪 Cerrar sesión</a>
+            </div>
+          </div>
+        {% else %}
+          <a href="{% url 'login' %}">Iniciar sesión</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="content" class="colM">
+      {% if messages %}
+        <ul class="messagelist">
+          {% for message in messages %}
+            {% if 'error' in message.tags %}
+              <li class="msg-error">{{ message }}</li>
+            {% elif 'warning' in message.tags %}
+              <li class="msg-warning">{{ message }}</li>
+            {% else %}
+              <li class="msg-ok">{{ message }}</li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+  <!-- ===== Modales ===== -->
+  <div class="modal-overlay" id="modalEditName" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalEditNameTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalEditNameTitle">Editar nombre</h3>
+        <button type="button" class="btn-close" data-close="#modalEditName">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="editNameContainer"><p style="margin:0;color:#666">Cargando…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalChangePwd" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalChangePwdTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalChangePwdTitle">Cambiar contraseña</h3>
+        <button type="button" class="btn-close" data-close="#modalChangePwd">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="changePwdContainer"><p style="margin:0;color:#666">Cargando…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Notificaciones =====
+    (function(){
+      const btn = document.getElementById('notifBell');
+      const menu = document.getElementById('notifMenu');
+      if (!btn || !menu) return;
+      function closeMenu(){ menu.classList.remove('is-open'); btn.setAttribute('aria-expanded','false'); }
+      function toggleMenu(e){ e.stopPropagation(); const open = menu.classList.toggle('is-open'); btn.setAttribute('aria-expanded',open?'true':'false'); }
+      btn.addEventListener('click',toggleMenu);
+      document.addEventListener('click',(e)=>{ if(!menu.contains(e.target)&&e.target!==btn) closeMenu(); });
+      document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeMenu(); });
+    })();
+
+    // ===== Menú de Usuario =====
+    (function(){
+      const menu=document.getElementById('userMenu');
+      if(!menu)return;
+      const btn=menu.querySelector('.user-btn');
+      btn.addEventListener('click',()=>menu.classList.toggle('open'));
+      document.addEventListener('click',(e)=>{if(!menu.contains(e.target))menu.classList.remove('open');});
+    })();
+
+    // ===== Modales AJAX =====
+    (function(){
+      const editBtn=document.getElementById('openEditName');
+      const pwdBtn=document.getElementById('openChangePwd');
+      const editOv=document.getElementById('modalEditName');
+      const pwdOv=document.getElementById('modalChangePwd');
+      const editCt=document.getElementById('editNameContainer');
+      const pwdCt=document.getElementById('changePwdContainer');
+
+      function openModal(ov){ov.classList.add('open');ov.setAttribute('aria-hidden','false');}
+      function closeModal(ov){ov.classList.remove('open');ov.setAttribute('aria-hidden','true');}
+
+      // cerrar con la X y clic fuera
+      document.querySelectorAll('.btn-close').forEach(b=>{
+        b.addEventListener('click',()=>closeModal(document.querySelector(b.dataset.close)));
+      });
+      [editOv,pwdOv].forEach(ov=>{
+        ov.addEventListener('click',(e)=>{if(e.target===ov)closeModal(ov);});
+      });
+
+      if(editBtn){
+        editBtn.addEventListener('click',()=>{
+          openModal(editOv);
+          editCt.innerHTML='<p style="margin:0;color:#666">Cargando…</p>';
+          fetch("{% url 'perfil_editar_modal' %}",{headers:{'X-Requested-With':'XMLHttpRequest'}})
+            .then(r=>r.text())
+            .then(html=>{editCt.innerHTML=html;})
+            .catch(()=>editCt.innerHTML='<p style="color:#a00">Error al cargar.</p>');
+        });
+      }
+      if(pwdBtn){
+        pwdBtn.addEventListener('click',()=>{
+          openModal(pwdOv);
+          pwdCt.innerHTML='<p style="margin:0;color:#666">Cargando…</p>';
+          fetch("{% url 'password_change_modal' %}",{headers:{'X-Requested-With':'XMLHttpRequest'}})
+            .then(r=>r.text())
+            .then(html=>{pwdCt.innerHTML=html;})
+            .catch(()=>pwdCt.innerHTML='<p style="color:#a00">Error al cargar.</p>');
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

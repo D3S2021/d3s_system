@@ -1,0 +1,32 @@
+{% extends "proyectos/_base_proyectos.html" %}
+{% block title %}Reabrir · {{ proyecto.nombre }}{% endblock %}
+{% block contenido %}
+<h1>Reabrir proyecto · {{ proyecto.nombre }}</h1>
+<p>Motivo y nuevas fechas de vencimiento para tareas pendientes.</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+
+  <h3>Tareas pendientes</h3>
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr><th>Tarea</th><th>Asignado</th><th>Prioridad</th><th>Nueva fecha</th></tr></thead>
+    <tbody>
+      {% for t in pendientes %}
+        <tr>
+          <td>{{ t.titulo }}</td>
+          <td>{{ t.asignado_a|default:"-" }}</td>
+          <td>{{ t.get_prioridad_display }}</td>
+          <td>
+            <input type="date" name="vence_el_{{ t.id }}">
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4">No hay tareas pendientes para reabrir.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:12px"><button type="submit">Confirmar reapertura</button></div>
+</form>
+{% endblock %}

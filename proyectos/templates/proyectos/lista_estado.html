@@ -1,0 +1,39 @@
+{# templates/proyectos/lista_estado.html #}
+{% extends "_base.html" %}
+{% load proyectos_extras %}
+{% include "proyectos/_cards_nav.html" %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<h1 style="margin:0 0 14px">{{ titulo }}</h1>
+
+<div style="margin: 8px 0 16px">
+  <a href="{% url 'proyectos:dashboard' %}">← Volver al panel</a>
+</div>
+
+{% if proyectos %}
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Descripción</th>
+        <th>Responsable</th>
+        <th style="width:90px">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in proyectos %}
+        <tr>
+          <td><a href="{% url 'proyectos:detalle' p.id %}">{{ p.nombre }}</a></td>
+          <td>{{ p.descripcion|default:"—"|truncatechars:120 }}</td>
+          <td>{{ p.responsable|get_full_name_or_username }}</td>
+          <td><a href="{% url 'proyectos:detalle' p.id %}">Ver</a></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No hay proyectos para mostrar.</p>
+{% endif %}
+{% endblock %}

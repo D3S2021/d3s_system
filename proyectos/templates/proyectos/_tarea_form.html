@@ -1,0 +1,142 @@
+{# templates/proyectos/_tarea_form.html #}
+<form id="formTarea"
+      method="post"
+      action="{{ action_url|default:'' }}"
+      class="tarea-form">
+  {% csrf_token %}
+
+  <div class="grid">
+    <div class="field">
+      <label for="{{ form.titulo.id_for_label }}">Título</label>
+      {{ form.titulo }}
+      {% for e in form.titulo.errors %}<div class="err">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.descripcion.id_for_label }}">Descripción</label>
+      {{ form.descripcion }}
+      {% for e in form.descripcion.errors %}<div class="err">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label for="{{ form.estado.id_for_label }}">Estado</label>
+        {{ form.estado }}
+        {% for e in form.estado.errors %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.prioridad.id_for_label }}">Prioridad</label>
+        {{ form.prioridad }}
+        {% for e in form.prioridad.errors %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label for="{{ form.asignado_a.id_for_label }}">Asignado a</label>
+        {{ form.asignado_a }}
+        {% for e in form.asignado_a.errors %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+      <div class="field">
+        <label for="{{ form.vence_el.id_for_label }}">Vence el</label>
+        {{ form.vence_el }}
+        {% for e in form.vence_el.errors %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+    </div>
+
+    {% if form.estimacion_horas %}
+      <div class="field">
+        <label for="{{ form.estimacion_horas.id_for_label }}">Estimación horas</label>
+        {{ form.estimacion_horas }}
+        {% for e in form.estimacion_horas.errors %}<div class="err">{{ e }}</div>{% endfor %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="footer">
+    <button type="button" id="btnCancelarTarea" class="btn-outline">Cancelar</button>
+    <button type="submit" class="btn-primary">
+      {{ submit_label|default:"Guardar" }}
+    </button>
+  </div>
+</form>
+
+<style>
+  /* Contenedor del form: se centra y no fuerza mínimos que rompan el modal */
+  .tarea-form{
+    width:100%;
+    max-width: 640px;
+    margin: 0 auto;
+    color:#0f172a;
+  }
+
+  .tarea-form .grid{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+  }
+
+  /* Filas a dos columnas, responsivo */
+  .tarea-form .row-2{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap:16px;
+  }
+  @media (max-width: 720px){
+    .tarea-form .row-2{ grid-template-columns: 1fr; }
+  }
+
+  .tarea-form .field label{
+    display:block;
+    font-size:14px;
+    font-weight:600;
+    color:#0f172a;
+    margin-bottom:6px;
+  }
+
+  .tarea-form input[type="text"],
+  .tarea-form input[type="date"],
+  .tarea-form input[type="number"],
+  .tarea-form select,
+  .tarea-form textarea{
+    width:100% !important;
+    box-sizing:border-box;
+    border:1px solid #d0d7de;
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:14px;
+    line-height:1.35;
+    color:#0f172a;
+    background:#fff;
+  }
+  .tarea-form select{ height: 44px; }
+  .tarea-form select option{ color:#0f172a; background:#fff; }
+
+  .tarea-form textarea{ min-height: 130px; resize: vertical; }
+
+  .tarea-form input:focus,
+  .tarea-form select:focus,
+  .tarea-form textarea:focus{
+    outline: none;
+    border-color:#2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+  }
+
+  .tarea-form .err{ color:#b42318; font-size:12px; margin-top:4px; }
+
+  .tarea-form .footer{
+    display:flex; justify-content:flex-end; gap:10px; margin-top:16px;
+  }
+  .btn-primary{
+    background:#2563eb; color:#fff;
+    border:1px solid #2563eb; border-radius:10px;
+    padding:10px 14px; cursor:pointer; font-weight:600;
+  }
+  .btn-primary:hover{ background:#1d4ed8; }
+  .btn-outline{
+    background:#fff; color:#0f172a;
+    border:1px solid #d0d7de; border-radius:10px;
+    padding:10px 14px; cursor:pointer; font-weight:600;
+  }
+  .btn-outline:hover{ background:#f8fafc; }
+</style>

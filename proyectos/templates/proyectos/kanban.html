@@ -1,0 +1,195 @@
+{# templates/proyectos/kanban.html #}
+{% extends "_base.html" %}
+{% load proyectos_extras %}
+
+{% block title %}Kanban · {{ proyecto.nombre }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .toolbar {display:flex;align-items:center;justify-content:space-between;margin:6px 0 16px}
+  .toolbar-left {display:flex;align-items:center;gap:12px}
+  .back-link{font-size:14px;text-decoration:none}
+  .title{font-size:22px;font-weight:700;margin:0}
+  .project-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .pill{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;border:1px solid #e5e5e5;background:#fafafa}
+  .state-pill{background:#eef5ff;border-color:#cfe0ff;color:#195ad6}
+
+  .grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:12px }
+  .col{ border:1px solid #e5e5e5; border-radius:8px; background:#fff; padding:8px; min-height:220px }
+  .col h3{ margin:4px 6px 8px; font-size:14px; color:#555; display:flex; align-items:center; justify-content:space-between }
+  .dropzone{ min-height:160px; padding:4px }
+  .card{ border:1px solid #eee; border-radius:8px; padding:8px; margin:8px 6px; background:#fafafa; cursor:grab }
+  .card:active{ cursor:grabbing }
+  .meta{ font-size:12px; color:#666; margin-top:4px }
+  .due-bad{ color:#9f1c1c; font-weight:600 }
+  .move{ display:flex; gap:6px; margin-top:6px; flex-wrap:wrap }
+  .move form{ display:inline }
+  .move button{ padding:4px 8px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer }
+  .add-btn{
+    padding:6px 10px; border-radius:8px; background:#2c7be5; color:#fff; border:0; cursor:pointer;
+  }
+
+  /* Modal simple */
+  .modal{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:50 }
+  .modal.open{ display:flex }
+  .modal-card{ background:#fff; border-radius:10px; padding:16px; width:520px; max-width:92vw; box-shadow:0 10px 30px rgba(0,0,0,.2) }
+  .modal-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px }
+  .modal-head h3{ margin:0; font-size:18px }
+  .close-x{ border:0;background:#eee;border-radius:8px;padding:4px 8px;cursor:pointer }
+</style>
+{% endblock %}
+
+{% block content %}
+
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <a class="back-link" href="{% url 'proyectos:detalle' proyecto.id %}">← Volver</a>
+      <h1 class="title">{{ proyecto.nombre }}</h1>
+    </div>
+
+    <div>
+      <button class="add-btn" id="btnAdd">+ Add</button>
+    </div>
+  </div>
+
+  <div class="project-meta">
+    <span class="pill"><strong>Prioridad:</strong> {{ proyecto.get_prioridad_display }}</span>
+    <span class="pill"><strong>Responsable:</strong> {{ proyecto.responsable|default:"—" }}</span>
+    <span class="pill state-pill"><strong>Estado:</strong> {{ proyecto.get_estado_display }}</span>
+  </div>
+
+  {% if proyecto.descripcion %}
+    <p style="margin:10px 0 18px; color:#444">{{ proyecto.descripcion }}</p>
+  {% endif %}
+
+  {# CSRF oculto para fetch() del drag&drop #}
+  <form style="display:none">{% csrf_token %}</form>
+
+  <div class="grid">
+    {# estados: dict clave->titulo; cols: dict clave->lista_tareas #}
+    {% for key, titulo in estados.items %}
+      <div class="col" data-estado="{{ key }}" ondragover="allowDrop(event)" ondrop="dropOnColumn(event)">
+        <h3>
+          {{ titulo }}
+          <span style="font-size:12px;color:#888">{{ cols|get_item:key|length }}</span>
+        </h3>
+
+        <div class="dropzone">
+          {% for t in cols|get_item:key %}
+            <div class="card" draggable="true" data-tarea="{{ t.id }}" ondragstart="dragTask(event)">
+              <div style="font-weight:600">{{ t.titulo }}</div>
+
+              <div class="meta">
+                {% if t.asignado_a %}
+                  {{ t.asignado_a.get_full_name|default:t.asignado_a.username }}
+                {% else %}-{% endif %}
+                ·
+                {% if t.vence_el %}
+                  {% if t.vence_el < hoy %}
+                    <span class="due-bad">{{ t.vence_el|date:"d/m/Y" }}</span>
+                  {% else %}
+                    {{ t.vence_el|date:"d/m/Y" }}
+                  {% endif %}
+                {% else %}—{% endif %}
+              </div>
+
+              <div class="move">
+                {# selector de estado como respaldo accesible #}
+                <form method="post" action="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+                  {% csrf_token %}
+                  <select name="estado" onchange="this.form.submit()">
+                    {% for k,v in estados.items %}
+                      <option value="{{ k }}" {% if t.estado == k %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                  </select>
+                </form>
+
+                <a href="#" onclick="openEdit({{ t.id }});return false;">Editar</a> |
+                <a href="{% url 'proyectos:tarea_eliminar' t.id %}" onclick="return confirm('¿Eliminar tarea?')">Eliminar</a>
+              </div>
+            </div>
+          {% empty %}
+            <div class="meta" style="margin:8px">Sin tareas.</div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# -------- Modal: Nueva tarea -------- #}
+  <div class="modal" id="modalNueva">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3>Nueva tarea</h3>
+        <button class="close-x" id="btnCerrarNueva">Cerrar</button>
+      </div>
+      <form method="post" action="{% url 'proyectos:tarea_crear' proyecto.id %}">
+        {% csrf_token %}
+        {{ form_tarea.as_p }}
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="submit" class="add-btn">Guardar</button>
+          <button type="button" class="close-x" id="btnCancelarNueva">Cancelar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- Modal Nueva tarea ---
+    const modal = document.getElementById('modalNueva');
+    const btnAdd = document.getElementById('btnAdd');
+    const btnCerrarNueva = document.getElementById('btnCerrarNueva');
+    const btnCancelarNueva = document.getElementById('btnCancelarNueva');
+
+    function openModal(){ modal.classList.add('open'); }
+    function closeModal(){ modal.classList.remove('open'); }
+
+    btnAdd?.addEventListener('click', openModal);
+    btnCerrarNueva?.addEventListener('click', closeModal);
+    btnCancelarNueva?.addEventListener('click', closeModal);
+
+    // --- Drag & Drop ---
+    let draggedId = null;
+
+    function dragTask(ev){
+      draggedId = ev.currentTarget.dataset.tarea;
+      ev.dataTransfer.effectAllowed = 'move';
+    }
+    function allowDrop(ev){ ev.preventDefault(); }
+
+    function dropOnColumn(ev){
+      ev.preventDefault();
+      const col = ev.currentTarget.closest('[data-estado]');
+      if(!col || !draggedId) return;
+      const nuevo = col.dataset.estado;
+
+      // Mover tarjeta en el DOM (optimistic UI)
+      const card = document.querySelector('[data-tarea="'+draggedId+'"]');
+      const dz = col.querySelector('.dropzone');
+      if(card && dz) dz.appendChild(card);
+
+      // POST a la vista Django para persistir
+      const url = "{% url 'proyectos:tarea_cambiar_estado' 0 %}".replace('0', draggedId);
+      const formData = new FormData();
+      formData.append('estado', nuevo);
+
+      fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCsrf() },
+        body: formData
+      }).catch(() => { /* opcional: revertir DOM si querés */ })
+        .finally(() => { draggedId = null; });
+    }
+
+    function getCsrf(){
+      const el = document.querySelector('input[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    }
+
+    // Placeholder para editar (podés enlazar a tu formulario inline si lo querés)
+    function openEdit(id){
+      alert('Editar tarea '+id+' (placeholder).');
+    }
+  </script>
+
+{% endblock %}
