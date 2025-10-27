@@ -1,5 +1,4 @@
 {% extends "economia/_base_adminlike.html" %}
-{% load l10n %}
 {% block title %}Planificar mes{% endblock %}
 
 {% block extra_css %}
@@ -42,7 +41,7 @@
 
   .btn-danger{
     background:#d9534f;
-    color:white !important;  /* texto blanco siempre */
+    color:white !important;
     border:none;
     padding:6px 12px;
     border-radius:4px;
@@ -55,7 +54,6 @@
   }
 </style>
 {% endblock %}
-
 
 {% block content_adminlike %}
 <div class="wrap">
@@ -100,11 +98,11 @@
                 </form>
               </td>
               <td class="right">
-                <input class="input-money" type="number" step="0.01" min="0"
+                <input class="input-money inp-int" type="text"
                        name="esperado_{{ it.cat.id }}"
-                       value="{{ it.esperado|default_if_none:0|unlocalize }}">
+                       value="{{ it.esperado|default_if_none:0 }}">
                 <span class="money-hint">
-                  ${{ it.esperado|default_if_none:0|floatformat:2|localize }}
+                  ${{ it.esperado|default_if_none:0 }}
                 </span>
               </td>
             </tr>
@@ -143,11 +141,11 @@
                 </form>
               </td>
               <td class="right">
-                <input class="input-money" type="number" step="0.01" min="0"
+                <input class="input-money inp-int" type="text"
                        name="esperado_{{ it.cat.id }}"
-                       value="{{ it.esperado|default_if_none:0|unlocalize }}">
+                       value="{{ it.esperado|default_if_none:0 }}">
                 <span class="money-hint">
-                  ${{ it.esperado|default_if_none:0|floatformat:2|localize }}
+                  ${{ it.esperado|default_if_none:0 }}
                 </span>
               </td>
             </tr>
@@ -161,4 +159,20 @@
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Fuerza enteros: remueve espacios, separadores y todo lo no numérico
+  document.addEventListener('input', function(e){
+    const el = e.target;
+    if (!el.classList.contains('inp-int')) return;
+    const clean = (el.value || '')
+      .replace(/\s+/g,'')
+      .replace(/\u00A0/g,'')
+      .replace(/[.,]/g,'')
+      .replace(/[^0-9]/g,'');
+    if (el.value !== clean) el.value = clean;
+  });
+</script>
 {% endblock %}

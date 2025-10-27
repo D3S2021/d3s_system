@@ -2,18 +2,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Value, DecimalField, CharField
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.timezone import now
+from django.db.models.functions import Coalesce, Cast
 
 from proyectos.models import HoraTrabajo
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from collections import defaultdict
 from datetime import date
+import re
 
 from .forms import GastoForm, GastoOwnEditForm, CategoriaQuickForm
 from .models import Transaccion, Categoria, PlanMensual
@@ -21,29 +23,41 @@ from notificaciones.models import Notificacion
 
 
 # ---------------------------------------------------------------------------
-# Util
+# Utils
 # ---------------------------------------------------------------------------
 
-def _safe_int(value, default):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+def _safe_int(v, default: int):
+    """
+    Convierte cadenas como '2%C2%A0025', '2 025', '2,025' → 2025.
+    Quita todo lo que no sea dígito. Si queda vacío, devuelve default.
+    """
+    if v is None:
         return default
+    s = str(v).replace("\u00A0", " ")  # NBSP a espacio normal
+    digits = re.sub(r"[^0-9]", "", s)
+    return int(digits) if digits else default
 
 
 def _to_decimal(x) -> Decimal:
     """Convierte a Decimal tolerando None/str con separadores."""
     if x is None:
-        return Decimal('0')
+        return Decimal("0")
     if isinstance(x, Decimal):
         return x
     s = str(x).strip()
-    # tolera "1.234,56" o "1234,56" o "1234.56"
-    s = s.replace('.', '').replace(',', '.') if (',' in s and '.' in s) else s.replace(',', '.')
+    # tolera "1.234,56" o "1234,56" o "1,234.56"
+    if "," in s and "." in s:
+        # uso el último separador como decimal
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    elif "," in s:
+        s = s.replace(",", ".")
     try:
         return Decimal(s)
     except (InvalidOperation, ValueError):
-        return Decimal('0')
+        return Decimal("0")
 
 
 # ---------------------------------------------------------------------------
@@ -142,8 +156,6 @@ def nueva_transaccion(request):
             tx.save()
             messages.success(request, "✅ Transacción enviada para validación.")
             return redirect("perfil")
-        # Si hay errores, cae a render al final con el mismo form
-
     else:
         form = GastoForm(user=request.user)
 
@@ -367,69 +379,96 @@ def transacciones_pendientes(request):
 
 
 # ---------------------------------------------------------------------------
-# Planificación mensual (nuevo)
+# Planificación mensual
 # ---------------------------------------------------------------------------
+from django.db.models.functions import Cast
+from django.db.models import CharField
+from django.utils.timezone import now
+from django.contrib import messages
+from django.shortcuts import render, redirect
 
-@login_required
-@permission_required("economia.can_validate_transactions", raise_exception=True)
+from .models import Categoria, PlanMensual
+
 def planificar_mes(request):
     """
     Cargar/editar montos esperados por categoría para el mes/año.
-    UI sin filtros (mes actual). Si falta el plan del mes, se precarga
-    con el último plan histórico por categoría.
+    TODO se maneja como ENTEROS y se evita leer el DecimalField desde la BD.
     """
     hoy = now().date()
+
+    def _safe_int(v, d):
+        if v is None:
+            return d
+        s = "".join(ch for ch in str(v) if ch.isdigit())
+        return int(s) if s else d
+
     year = _safe_int(request.GET.get("year"), hoy.year)
     month = _safe_int(request.GET.get("month"), hoy.month)
 
     cats_gasto = list(Categoria.objects.filter(activo=True, tipo="gasto").order_by("nombre"))
-    cats_ing = list(Categoria.objects.filter(activo=True, tipo="ingreso").order_by("nombre"))
+    cats_ing   = list(Categoria.objects.filter(activo=True, tipo="ingreso").order_by("nombre"))
 
-    planes_mes_qs = PlanMensual.objects.filter(year=year, month=month)
-    planes_map = {p.categoria_id: float(p.monto_esperado) for p in planes_mes_qs}
+    # ---------- helpers sólo enteros ----------
+    def parse_int(raw) -> int:
+        s = (raw or "").strip()
+        s = (s.replace(" ", "")
+               .replace("\u00a0", "")
+               .replace(".", "")
+               .replace(",", ""))
+        return int(s) if s.isdigit() else 0
 
-    def ultimo_plan_categoria(cat_id: int) -> float:
-        p = (
+    # 1) NO leemos instancias de PlanMensual => evitamos converter Decimal de SQLite.
+    #    Traemos sólo categoria_id y el monto casteado a texto, y lo parseamos a int.
+    planes_rows = (
+        PlanMensual.objects
+        .filter(year=year, month=month)
+        .annotate(me_txt=Cast("monto_esperado", output_field=CharField()))
+        .values("categoria_id", "me_txt")
+    )
+    planes_map = {r["categoria_id"]: parse_int(r["me_txt"]) for r in planes_rows}
+
+    # 2) Último plan histórico por categoría, también casteado a texto.
+    def ultimo_plan_categoria(cat_id: int) -> int:
+        v = (
             PlanMensual.objects
             .filter(categoria_id=cat_id)
             .order_by("-year", "-month")
-            .values_list("monto_esperado", flat=True)
+            .annotate(me_txt=Cast("monto_esperado", output_field=CharField()))
+            .values_list("me_txt", flat=True)
             .first()
         )
-        return float(p) if p is not None else 0.0
+        return parse_int(v)
 
     if request.method == "POST":
+        # IMPORTANTÍSIMO: no usamos get_or_create (trae instancia y dispara converter).
         for cat in cats_gasto + cats_ing:
             key = f"esperado_{cat.id}"
-            raw = (request.POST.get(key) or "").replace(".", "").replace(",", ".")
-            try:
-                val = float(raw) if raw != "" else 0.0
-            except ValueError:
-                val = 0.0
+            val = parse_int(request.POST.get(key))
 
-            plan, created = PlanMensual.objects.get_or_create(
-                year=year, month=month, categoria=cat,
-                defaults={"monto_esperado": val, "creado_por": request.user}
-            )
-            if not created and float(plan.monto_esperado) != val:
-                plan.monto_esperado = val
-                plan.save(update_fields=["monto_esperado", "actualizado_en"])
+            qs = PlanMensual.objects.filter(year=year, month=month, categoria=cat)
+            updated = qs.update(monto_esperado=val, actualizado_en=now())
+            if not updated:
+                PlanMensual.objects.create(
+                    year=year,
+                    month=month,
+                    categoria=cat,
+                    monto_esperado=val,
+                    creado_por=request.user,
+                )
 
         messages.success(request, "Plan mensual guardado.")
         return redirect("economia:resumen")
 
+    # 3) Armamos items para el template (todo en int)
     def build_items(cats):
         items = []
         for c in cats:
-            if c.id in planes_map:
-                esperado = planes_map[c.id]
-            else:
-                esperado = ultimo_plan_categoria(c.id)
+            esperado = planes_map.get(c.id, ultimo_plan_categoria(c.id))
             items.append({"cat": c, "esperado": esperado})
         return items
 
     cats_gasto_plans = build_items(cats_gasto)
-    cats_ing_plans = build_items(cats_ing)
+    cats_ing_plans   = build_items(cats_ing)
 
     return render(
         request,
@@ -444,7 +483,7 @@ def planificar_mes(request):
 
 
 # ---------------------------------------------------------------------------
-# Resumen por categorías (con Plan vs Real)
+# Resumen por categorías (Plan vs Real)
 # ---------------------------------------------------------------------------
 
 @login_required
@@ -462,21 +501,41 @@ def resumen_categorias(request):
         estado="aprobado", fecha__year=year, fecha__month=month
     )
 
+    dec_out = DecimalField(max_digits=12, decimal_places=2)
     gastos_real = (
         qs_mes.filter(categoria__tipo="gasto")
         .values("categoria__id", "categoria__nombre")
-        .annotate(total=Sum("monto"))
+        .annotate(
+            total=Coalesce(
+                Sum(Cast("monto", output_field=dec_out)),
+                Value(Decimal("0.00")),
+                output_field=dec_out,
+            )
+        )
         .order_by("categoria__nombre")
     )
     ingresos_real = (
         qs_mes.filter(categoria__tipo="ingreso")
         .values("categoria__id", "categoria__nombre")
-        .annotate(total=Sum("monto"))
+        .annotate(
+            total=Coalesce(
+                Sum(Cast("monto", output_field=dec_out)),
+                Value(Decimal("0.00")),
+                output_field=dec_out,
+            )
+        )
         .order_by("categoria__nombre")
     )
 
-    planes_qs = PlanMensual.objects.filter(year=year, month=month).select_related("categoria")
-    planes = {p.categoria_id: _to_decimal(p.monto_esperado) for p in planes_qs}
+    # Plan del mes: casteo a texto y luego a Decimal en Python
+    planes_qs = (
+        PlanMensual.objects
+        .filter(year=year, month=month)
+        .select_related("categoria")
+        .annotate(monto_txt=Cast("monto_esperado", output_field=CharField()))
+        .values("categoria_id", "monto_txt")
+    )
+    planes = {p["categoria_id"]: _to_decimal(p["monto_txt"]) for p in planes_qs}
 
     def _mk_row(nombre: str, plan, real):
         plan = _to_decimal(plan)
@@ -484,11 +543,11 @@ def resumen_categorias(request):
         if plan > 0:
             progress_pct = int((real / plan) * 100)
             is_over = real > plan
-            over_amount = (real - plan) if is_over else Decimal('0')
+            over_amount = (real - plan) if is_over else Decimal("0")
         else:
             progress_pct = 0
             is_over = False
-            over_amount = Decimal('0')
+            over_amount = Decimal("0")
         return {
             "nombre": nombre,
             "plan": plan,
@@ -506,7 +565,7 @@ def resumen_categorias(request):
                 continue
             cat_id = row["categoria__id"]
             nombre = row["categoria__nombre"]
-            plan = planes.get(cat_id, Decimal('0'))
+            plan = planes.get(cat_id, Decimal("0"))
             items.append(_mk_row(nombre, plan, real))
         items.sort(key=lambda x: x["nombre"].lower())
         return items
@@ -588,7 +647,6 @@ def lista_transacciones(request):
 # ---------------------------------------------------------------------------
 # Cierre de caja
 # ---------------------------------------------------------------------------
-
 @login_required
 @permission_required("economia.can_validate_transactions", raise_exception=True)
 def cierre_caja(request):
@@ -597,24 +655,24 @@ def cierre_caja(request):
     raw_year = request.GET.get("year")
     raw_month = request.GET.get("month")
 
+    # 👉 en vez de mostrar mensajes, marcamos este hint para el template
+    show_hint = False
     if raw_year in (None, "") or raw_month in (None, ""):
-        messages.error(request, "⚠️ Debes completar Mes y Año para ver el cierre.")
         year, month = hoy.year, hoy.month
+        show_hint = True
     else:
         year = _safe_int(raw_year, hoy.year)
         month = _safe_int(raw_month, hoy.month)
         if not (1 <= month <= 12):
-            messages.error(request, "⚠️ El mes indicado es inválido. Se usó el mes actual.")
             month = hoy.month
+            show_hint = True
 
-    # ---- Totales de transacciones del mes
     qs_mes = Transaccion.objects.filter(estado="aprobado", fecha__year=year, fecha__month=month)
     total_ingresos = qs_mes.filter(categoria__tipo="ingreso").aggregate(s=Sum("monto"))["s"] or 0
     total_gastos   = qs_mes.filter(categoria__tipo="gasto").aggregate(s=Sum("monto"))["s"] or 0
     saldo = total_ingresos - total_gastos
 
     # ===== HORAS: por persona y proyecto =====
-    # Rango por defecto: TODO el mes seleccionado
     from calendar import monthrange
     from collections import defaultdict
     from datetime import date
@@ -631,7 +689,6 @@ def cierre_caja(request):
     except ValueError:
         hasta = last_day
 
-    # filtro de estado (?estado=todas|cargada|aprobada|rechazada)
     estado = (request.GET.get("estado") or "todas").lower()
     horas_base = HoraTrabajo.objects.select_related("usuario", "proyecto").filter(fecha__range=(desde, hasta))
     if estado in {"cargada", "aprobada", "rechazada"}:
@@ -651,7 +708,7 @@ def cierre_caja(request):
         .order_by("usuario__first_name", "usuario__last_name", "proyecto__nombre")
     )
 
-    horas_por_persona = []  # [{persona, username, proyectos:[{proyecto, horas}], total_persona}]
+    horas_por_persona = []
     bucket = defaultdict(list)
     totales_persona = defaultdict(float)
 
@@ -685,9 +742,10 @@ def cierre_caja(request):
         "saldo": saldo,
         "desde": desde,
         "hasta": hasta,
-        "estado": estado,  # para que el template muestre qué filtro está aplicado
+        "estado": estado,
         "horas_por_persona": horas_por_persona,
         "total_horas_general": total_horas_general,
+        "show_hint": show_hint,  # 👈 para mostrar la aclaración en el template
     }
     return render(request, "economia/cierre_caja.html", ctx)
 
@@ -733,7 +791,7 @@ def categoria_eliminar(request, pk):
         return HttpResponseBadRequest("Método inválido.")
 
     cat = get_object_or_404(Categoria, pk=pk)
-    # Soft delete para evitar conflicto con Transaccion(on_delete=PROTECT)
+    # Soft delete
     if not cat.activo:
         messages.info(request, "La categoría ya estaba desactivada.")
     else:

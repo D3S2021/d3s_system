@@ -3,7 +3,7 @@
 
 {% block content_adminlike %}
 
-<form method="get" style="margin-bottom:12px">
+<form method="get" style="margin-bottom:6px">
   Mes:
   <select name="month">
     {% for m in months %}
@@ -14,6 +14,11 @@
   <input type="number" name="year" value="{{ year }}" style="width:90px" />
   <button type="submit">Ver</button>
 </form>
+
+{# Aclaración suave cuando no vino bien mes/año #}
+{% if show_hint %}
+    Completar <strong>Mes</strong> y <strong>Año</strong>.
+  {% endif %}
 
 <div class="cards">
   <div class="card">
@@ -33,7 +38,6 @@
 <form method="post" style="margin-top:16px">
   {% csrf_token %}
   <button name="accion" value="descargar_pdf" class="default" disabled title="Próximamente">Descargar resumen (PDF)</button>
-  <!-- Más adelante: botón “Cerrar mes” real con persistencia -->
 </form>
 
 <hr style="margin:18px 0" />
@@ -45,9 +49,7 @@
   .tabla-horas-cierre thead th { background:#fafafa; font-weight:600; }
   .fila-total-persona td { font-weight:600; background:#fcfcfc; }
   .subtle { color:#666; font-size:12px; }
-  .person-header {
-    display:flex; align-items:baseline; gap:8px; margin:14px 0 6px;
-  }
+  .person-header { display:flex; align-items:baseline; gap:8px; margin:14px 0 6px; }
 </style>
 
 <div class="resumen-horas" style="display:flex; align-items:center; justify-content:space-between; margin:6px 0 4px;">

@@ -533,19 +533,88 @@ def tarea_crear(request, proyecto_id):
 @login_required
 def tarea_detalle_modal(request, pk: int):
     """
-    Devuelve HTML (partial) con el detalle de una tarea para ser mostrado en el modal.
-    Solo accesible si el usuario tiene permiso sobre el proyecto de la tarea.
+    Devuelve el HTML del detalle de la tarea (partial) para el modal.
+    Incluye el histórico de mensajes y un flag de permiso para chatear.
+    Forzamos no-cache para que, al reabrir el modal, se vean los mensajes nuevos.
     """
-    # Cargamos la tarea y verificamos acceso por proyecto
-    tarea = get_object_or_404(Tarea.objects.select_related("proyecto", "asignado_a"), pk=pk)
+    tarea = get_object_or_404(
+        Tarea.objects.select_related("proyecto", "asignado_a"),
+        pk=pk
+    )
+    # Chequeo de acceso al proyecto
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
+
+    # 🔧 Cambiado: no dependemos de related_name; traemos comentarios explícitamente
+    mensajes = (
+        Comentario.objects
+        .select_related("autor")
+        .filter(tarea=tarea)
+        .order_by("creado_en")
+    )
+
+    puede_chatear = (
+        request.user.has_perm("proyectos.can_manage_proyectos")
+        or (tarea.proyecto and tarea.proyecto.responsable_id == request.user.id)
+        or (tarea.asignado_a_id == request.user.id if tarea.asignado_a_id else False)
+    )
 
     html = render_to_string(
         "proyectos/_tarea_detalle.html",
-        {"t": tarea},
+        {"t": tarea, "mensajes": mensajes, "puede_chatear": puede_chatear},
         request=request,
     )
-    return HttpResponse(html)
+    resp = HttpResponse(html)
+    # 🔧 No-cache agresivo para evitar respuestas viejas en el modal
+    resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp["Pragma"] = "no-cache"
+    resp["Expires"] = "0"
+    return resp
+
+
+@login_required
+def tarea_chat_enviar(request, pk: int):
+    """
+    Recibe POST (AJAX) con 'mensaje' y crea un Comentario en la tarea.
+    Devuelve JSON: {ok: True, html: "<li class='msg ...'>...</li>"} para append en el chat.
+    """
+    tarea = get_object_or_404(
+        Tarea.objects.select_related("proyecto"),
+        pk=pk
+    )
+    # Chequeo de permisos de acceso al proyecto
+    _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
+
+    # Permisos de chat: admin de proyectos, responsable del proyecto o asignado a la tarea
+    puede_chatear = (
+        request.user.has_perm("proyectos.can_manage_proyectos")
+        or (tarea.proyecto and tarea.proyecto.responsable_id == request.user.id)
+        or (tarea.asignado_a_id == request.user.id if tarea.asignado_a_id else False)
+    )
+    if not puede_chatear:
+        return JsonResponse({"ok": False, "error": "Sin permiso para chatear en esta tarea."}, status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Método inválido."}, status=405)
+
+    cuerpo = (request.POST.get("mensaje") or "").strip()
+    if not cuerpo:
+        return JsonResponse({"ok": False, "error": "Escribí un mensaje."}, status=400)
+
+    # Crear el comentario
+    msg = Comentario.objects.create(tarea=tarea, autor=request.user, cuerpo=cuerpo)
+
+    # Render del item HTML del mensaje (li) para insertarlo directo en la lista
+    html = render_to_string(
+        "proyectos/_tarea_chat_message.html",
+        {"m": msg},
+        request=request,
+    )
+
+    # Indicamos no-cache por si algún proxy guarda la respuesta del POST
+    response = JsonResponse({"ok": True, "html": html})
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response["Pragma"] = "no-cache"
+    return response
 
 @login_required
 def tarea_editar(request, pk):

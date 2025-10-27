@@ -1,0 +1,10 @@
+{# Un mensaje del chat #}
+<li class="msg {% if m.autor_id == request.user.id %}me{% else %}other{% endif %}">
+  <div class="bubble">
+    <div class="meta">
+      <strong>{{ m.autor.get_full_name|default:m.autor.username }}</strong>
+      <span>· {{ m.creado_en|date:"d/m/Y H:i" }}</span>
+    </div>
+    <div class="text">{{ m.cuerpo|linebreaksbr }}</div>
+  </div>
+</li>

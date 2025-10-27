@@ -107,6 +107,68 @@
   /* Botón "Ver" como link */
   .btn-link { border:none; background:transparent; color:#2c7be5; cursor:pointer; font-weight:600; padding:0; }
   .btn-link:hover { text-decoration:underline; }
+
+  /* ===== NUEVO: estilos cards para "Mis tareas" ===== */
+  .tareas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+    margin-top: 10px;
+  }
+  .tarea-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .tarea-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.07);
+    border-color: #d1d5db;
+  }
+  .tarea-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .tarea-titulo {
+    font-weight: 700;
+    font-size: 16px;
+    color: #111827;
+  }
+  .tarea-proyecto {
+    font-size: 14px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+  .tarea-info {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 14px;
+  }
+  .lbl { color: #6b7280; font-weight: 600; margin-right: 4px; }
+  .badge {
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .btn-detalle {
+    border: none;
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .btn-detalle:hover { background: #dbeafe; }
 </style>
 {% endblock %}
 
@@ -212,6 +274,125 @@
   <p>No tenés transacciones pendientes.</p>
 {% endif %}
 
+{# ========= MIS TAREAS ASIGNADAS ========= #}
+<h2 style="margin-top:28px">Mis tareas</h2>
+
+{% if tareas_asignadas %}
+  <div class="tareas-grid">
+    {% for t in tareas_asignadas %}
+      <div class="tarea-card">
+        <div class="tarea-header">
+          <div class="tarea-titulo">{{ t.titulo }}</div>
+          {# Pasamos context=perfil para que el partial muestre el detalle reducido #}
+          <button
+            type="button"
+            class="btn-detalle js-open-tarea"
+            data-url="{% url 'proyectos:tarea_detalle_modal' t.id %}?context=perfil"
+          >Detalle</button>
+        </div>
+        {% if t.proyecto %}
+          <div class="tarea-proyecto">{{ t.proyecto.nombre }}</div>
+        {% endif %}
+        <div class="tarea-info">
+          <div><span class="lbl">Vence:</span> {% if t.vence_el %}{{ t.vence_el|date:"d/m/Y" }}{% else %}—{% endif %}</div>
+          <div><span class="lbl">Prioridad:</span> <span class="badge">{{ t.get_prioridad_display|default:"—" }}</span></div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  {# Modal de tarea #}
+  <div class="modal-overlay" id="modalTarea" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTareaTitle">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTareaTitle">Detalle de tarea</h3>
+        <button type="button" class="btn-close" id="closeModalTarea" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="modalTareaContainer"><p style="margin:0;color:#666">Cargando…</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const overlay   = document.getElementById('modalTarea');
+      const btnClose  = document.getElementById('closeModalTarea');
+      const container = document.getElementById('modalTareaContainer');
+
+      function open(){ overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false'); }
+      function close(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+
+      function attachChatHandlers(){
+        const form = container.querySelector('#chatForm');
+        const list = container.querySelector('#chatList');
+        const box  = container.querySelector('#chatBox');
+        if (!form) return;
+
+        const scrollBottom = () => { if (box) box.scrollTop = box.scrollHeight; };
+        scrollBottom();
+
+        form.addEventListener('submit', async function(e){
+          e.preventDefault();
+          const data = new FormData(form);
+          const btn  = form.querySelector('button[type=submit]');
+          btn.disabled = true;
+          try{
+            const r = await fetch(form.action, {
+              method: 'POST',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' },
+              body: data
+            });
+            const json = await r.json();
+            if (json.ok){
+              const tmp = document.createElement('div');
+              tmp.innerHTML = json.html || '';
+              let li = tmp.firstElementChild;
+              if (!li) {
+                li = document.createElement('li');
+                li.className = 'msg me';
+                li.innerHTML = '<div class="bubble"><div class="meta"><strong>Yo</strong> · ahora</div><div class="text"></div></div>';
+                li.querySelector('.text').textContent = data.get('mensaje') || '';
+              }
+              list.appendChild(li);
+              form.reset();
+              scrollBottom();
+            } else {
+              alert(json.error || 'No se pudo enviar el mensaje.');
+            }
+          } catch(err){
+            console.error(err);
+            alert('Error de red.');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      }
+
+      document.addEventListener('click', (e)=>{
+        const btn = e.target.closest('.js-open-tarea');
+        if(!btn) return;
+
+        container.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
+        open();
+        const url = btn.dataset.url + (btn.dataset.url.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+
+          .then(r => r.text())
+          .then(html => { container.innerHTML = html; attachChatHandlers(); })
+          .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el detalle.</p>'; });
+      });
+
+      btnClose.addEventListener('click', close);
+      overlay.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') close(); });
+    })();
+  </script>
+{% else %}
+  <p>No tenés tareas asignadas.</p>
+{% endif %}
+
+
 <h2 style="margin-top:28px">Mis horas</h2>
 
 {% if mis_horas_grouped %}
@@ -239,7 +420,6 @@
           </td>
         </tr>
 
-        {# fila de detalles expandible por grupo #}
         <tr id="det-{{ g.pid }}" class="detalle-row" style="display:none">
           <td colspan="5">
             <table class="subtabla">
@@ -276,7 +456,6 @@
     </tbody>
   </table>
 {% elif mis_horas %}
-  {# Fallback: listado plano si no vino el agrupado #}
   <table class="perfil-horas">
     <thead><tr><th>Fecha</th><th>Horas</th><th>Proyecto/Area</th><th>Tarea</th><th>Estado</th><th>Descripción</th></tr></thead>
     <tbody>
@@ -363,7 +542,7 @@ document.addEventListener('click', function(e){
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
     container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
-    fetch(URL_FORM, {headers: {'X-Requested-With':'XMLHttpRequest'}})
+    fetch(URL_FORM, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
       .then(r => r.text())
       .then(html => { container.innerHTML = html; })
       .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });
@@ -387,7 +566,7 @@ document.addEventListener('click', function(e){
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
     container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
-    fetch(URL_HORAS, {headers: {'X-Requested-With':'XMLHttpRequest'}})
+    fetch(URL_HORAS, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
       .then(r => r.text())
       .then(html => { container.innerHTML = html; attachFormHandler(); })
       .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });

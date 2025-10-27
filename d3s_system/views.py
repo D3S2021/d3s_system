@@ -4,14 +4,17 @@ from django import forms
 from django.contrib.auth import logout, update_session_auth_hash, get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
-from django.db.models import Q, Sum, Max, Count, F, Value, CharField, DecimalField
+from django.db.models import Q, Sum, Max, Count, F, Value, DecimalField, Case, When, IntegerField
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 
 from economia.models import Transaccion
-from proyectos.models import HoraTrabajo, Proyecto
+from proyectos.models import HoraTrabajo, Proyecto, Tarea
+
+
+
 
 
 # ------------------------------------------------------------
@@ -92,6 +95,22 @@ def perfil_usuario(request):
             "descripcion": "Gestión de ingresos, gastos y balances.",
         })
 
+    ESTADOS_ACTIVOS = ["todo", "doing", "review"]
+
+    tareas_asignadas = (
+        Tarea.objects
+        .select_related("proyecto", "asignado_a")
+        .filter(
+            asignado_a=user,
+            proyecto__is_archivado=False
+        )
+        .filter(estado__in=ESTADOS_ACTIVOS)       # si querés incluir todas, quitá esta línea
+        .order_by(
+            Case(When(vence_el__isnull=True, then=1), default=0, output_field=IntegerField()),
+            "vence_el", "id"
+        )
+    )
+
     return render(
         request,
         "perfil.html",
@@ -102,6 +121,7 @@ def perfil_usuario(request):
             "mis_horas": mis_horas,                     # detalle inline
             "mis_horas_grouped": mis_horas_grouped,     # tabla agrupada
             "proyectos_asignados": proyectos_asignados,
+            "tareas_asignadas": tareas_asignadas,
         },
     )
 

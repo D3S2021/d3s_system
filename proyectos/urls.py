@@ -42,5 +42,7 @@ urlpatterns = [
     path("horas/<int:pk>/aprobar/", views.horas_aprobar, name="horas_aprobar"),
     path("horas/<int:pk>/rechazar/", views.horas_rechazar, name="horas_rechazar"),
 
+    path("tareas/<int:pk>/chat/enviar/", views.tarea_chat_enviar, name="tarea_chat_enviar"),
+
 
 ]

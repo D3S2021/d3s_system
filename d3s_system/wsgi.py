@@ -15,6 +15,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'd3s_system.settings')
 
 application = get_wsgi_application()
 
+'''
 # --- Reinicialización de base de datos (sólo una vez) ---
 import os
 from django.db import connection
@@ -36,3 +37,4 @@ if os.getenv("RESET_DB_ON_START") == "1":
         print("✅ Migraciones aplicadas correctamente.")
     except Exception as e:
         print("❌ Error al reinicializar la base:", e)
+'''

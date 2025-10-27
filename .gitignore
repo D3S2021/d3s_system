@@ -12,3 +12,6 @@ __pycache__/
 
 # Archivos de VSCode
 .vscode/
+
+# Archivos subidos localmente
+/media/

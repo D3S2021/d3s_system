@@ -1,45 +1,95 @@
 {% extends "_base.html" %}
 {% block title %}Mis notificaciones{% endblock %}
 
-{% block content %}
-<h1>Mis notificaciones</h1>
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .header {
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 12px; margin: 8px 0 16px;
+  }
+  .title { margin:0; font-weight:800; letter-spacing:-.02em; }
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 12px; border:1px solid #d0d7de; border-radius:10px;
+    background:#fff; color:#0f172a; text-decoration:none; cursor:pointer;
+  }
+  .btn:hover { background:#f8fafc; }
+  .btn-primary { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .btn-primary:hover { background:#1d4ed8; }
+  .btn-sm { padding:6px 10px; border-radius:8px; font-size:.92rem; }
 
-{% if notificaciones %}
-  <ul style="list-style:none;padding:0;margin:0">
-    {% for n in notificaciones %}
-      <li style="margin:10px 0; border:1px solid #e5e5e5; padding:12px; border-radius:6px; background:#fff;">
-        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start">
-          <div>
-            <strong>{{ n.titulo }}</strong>
-            <div style="font-size:12px; color:#666">{{ n.creada|date:"d/m/Y H:i" }}</div>
-            {% if n.cuerpo %}
-              <p style="margin:6px 0 0">{{ n.cuerpo }}</p>
-            {% endif %}
-            {% if n.url %}
-              <p style="margin:6px 0 0">
-                <a href="{{ n.url }}">Ir al detalle</a>
-              </p>
+  .cards { display:flex; flex-direction:column; gap:14px; }
+  .card {
+    border:1px solid #e5e7eb; border-radius:12px; background:#fff;
+    padding:14px 16px; box-shadow:0 1px 2px rgba(16,24,40,.04);
+  }
+  .card-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .left { display:flex; align-items:center; gap:10px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#22c55e; }
+  .dot.muted { background:#d1d5db; }
+  .ntitle { margin:0; font-weight:700; color:#0f172a; }
+  .meta { color:#64748b; font-size:.9rem; }
+  .body { margin:.4rem 0 .6rem; color:#111827; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; }
+  .link { color:#2563eb; text-decoration:none; }
+  .link:hover { text-decoration:underline; }
+
+  @media (max-width:680px){
+    .header { flex-direction:column; align-items:flex-start; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <div class="header">
+    <h1 class="title">Mis notificaciones</h1>
+    <form method="post" action="{% url 'notificaciones:marcar_todas' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Marcar todas como leídas</button>
+    </form>
+  </div>
+
+  {% if notificaciones %}
+    <div class="cards">
+      {% for n in notificaciones %}
+        <div class="card">
+          <div class="card-head">
+            <div class="left">
+              <span class="dot {% if n.leida %}muted{% endif %}"></span>
+              <div>
+                <h3 class="ntitle">{{ n.titulo }}</h3>
+                <div class="meta">{{ n.creada|date:"d/m/Y H:i" }}</div>
+              </div>
+            </div>
+
+            {# Botón individual #}
+            {% if not n.leida %}
+              <form method="post" action="{% url 'notificaciones:marcar_leida' n.id %}">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-primary">Marcar como leída</button>
+              </form>
+            {% else %}
+              <span class="meta">Leída</span>
             {% endif %}
           </div>
 
-          <div>
-            {% if not n.leida %}
-              <a class="button" href="{% url 'notificaciones:marcar_leida' n.id %}">Marcar como leída</a>
-            {% else %}
-              <span style="color:#6c757d;font-size:12px">Leída</span>
+          {% if n.cuerpo %}
+            <div class="body">{{ n.cuerpo }}</div>
+          {% endif %}
+
+          <div class="actions">
+            {% if n.url %}
+              <a class="btn btn-sm" href="{{ n.url }}">Ir al detalle</a>
             {% endif %}
           </div>
         </div>
-      </li>
-    {% endfor %}
-  </ul>
-
-  <!-- Botón para marcar todas como leídas -->
-  <form method="post" action="{% url 'notificaciones:marcar_todas' %}" style="margin-top:12px">
-    {% csrf_token %}
-    <button type="submit" class="button">Marcar todas como leídas</button>
-  </form>
-{% else %}
-  <p>No tenés notificaciones.</p>
-{% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p style="color:#64748b">No tenés notificaciones.</p>
+  {% endif %}
+</div>
 {% endblock %}
