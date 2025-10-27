@@ -18,6 +18,9 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv('DEBUG', '1') == '1'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# (Nuevo recomendado para Render)
+CSRF_TRUSTED_ORIGINS = os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if os.getenv("CSRF_TRUSTED_ORIGINS") else []
+
 # ====== Apps ======
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -68,7 +71,11 @@ WSGI_APPLICATION = 'd3s_system.wsgi.application'
 # ====== Base de datos ======
 if os.getenv("DATABASE_URL"):
     DATABASES = {
-        "default": dj_database_url.parse(os.getenv("DATABASE_URL"), conn_max_age=600)
+        "default": dj_database_url.config(
+            conn_max_age=600,
+            ssl_require=True,
+            default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        )
     }
 else:
     DATABASES = {
