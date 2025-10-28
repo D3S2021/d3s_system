@@ -8,7 +8,7 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         CONFIG = {
             "Contabilidad": {
-                "economia": ["view", "add", "change"],  # permisos del módulo 'economia'
+                "economia": ["view", "add", "change","view_dashboard"],  # permisos del módulo 'economia'
             },
             "Proyectos": {
                 "proyectos": ["view", "add", "change"],  # permisos del módulo 'proyectos'
