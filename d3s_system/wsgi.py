@@ -15,6 +15,14 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'd3s_system.settings')
 
 application = get_wsgi_application()
 
+# === EJECUTAR seed_groups AUTOMÁTICAMENTE (solo 1 vez) ===
+try:
+    from django.core.management import call_command
+    call_command("seed_groups")
+except Exception as e:
+    print(f"⚠️ Error ejecutando seed_groups: {e}")
+
+
 '''
 # --- Reinicialización de base de datos (sólo una vez) ---
 import os
