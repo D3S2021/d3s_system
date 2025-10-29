@@ -23,7 +23,7 @@
       display:none; position:absolute; top:24px; right:0;
       width:320px; background:#fff; border:1px solid #ddd;
       border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.2);
-      z-index: 2000; /* ↑ por encima del header del admin */
+      z-index: 2000;
       color:#2c3e50;
     }
     .notif-dropdown.is-open{ display:block; }
@@ -52,16 +52,26 @@
     }
     .notif-dropdown .footer a:hover{ text-decoration:underline !important;color:#1b5cb8 !important; }
 
-    /* ===== Menú de usuario ===== */
-    .user-menu{ position:relative; display:inline-block; }
-    .user-btn{
-      background:transparent; border:0; color:#fff; font-weight:600;
-      cursor:pointer; padding:6px 8px; line-height:1;
+    /* ===== Menú de usuario (ajustado) ===== */
+    .user-menu{ position:relative; display:inline-flex; align-items:center; gap:6px; }
+    .user-name-link{
+      color:#fff; font-weight:700; text-decoration:none;
+      padding:6px 8px; border-radius:6px; line-height:1;
     }
+    .user-name-link:hover{ text-decoration:underline; }
+
+    .user-caret-btn{
+      background:transparent; border:0; color:#fff; cursor:pointer;
+      padding:6px 8px; line-height:1; border-radius:6px;
+      display:inline-flex; align-items:center; justify-content:center;
+      font-size:20px; /* flecha más grande */
+    }
+    .user-caret-btn:focus-visible{ outline:2px solid rgba(56,97,251,.6); outline-offset:2px; }
+
     .user-dd{
       position:absolute;
       right:0;
-      top:100%;
+      top:calc(100% + 6px);
       min-width:230px;
       background:#fff;
       border:1px solid #000000;
@@ -162,12 +172,19 @@
             </div>
           </div>
 
-          <!-- ⚙️ Menú Usuario -->
+          <!-- 👤 Menú Usuario -->
           <div class="user-menu" id="userMenu">
-            <button class="user-btn" type="button">
-              {{ request.user.get_full_name|default:request.user.username }} ▾
+            <!-- Nombre: link directo al perfil -->
+            <a class="user-name-link" href="{% url 'perfil' %}">
+              {{ request.user.get_full_name|default:request.user.username }}
+            </a>
+
+            <!-- Flecha: solo abre/cierra el dropdown -->
+            <button class="user-caret-btn" type="button" id="userCaret" aria-haspopup="menu" aria-expanded="false" title="Abrir menú">
+              ▾
             </button>
-            <div class="user-dd">
+
+            <div class="user-dd" role="menu" aria-label="Menú de usuario">
               <button type="button" id="openEditName">✏️ Cambiar nombre</button>
               <button type="button" id="openChangePwd">🔑 Cambiar contraseña</button>
               <div class="divider"></div>
@@ -237,7 +254,7 @@
         btn.setAttribute('aria-expanded','false');
       }
       function toggleMenu(e){
-        e.stopPropagation();                   // evita que el click burbujee al document
+        e.stopPropagation();
         const open = menu.classList.toggle('is-open');
         btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       }
@@ -252,17 +269,25 @@
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
     })();
 
-    // ===== Menú de Usuario =====
+    // ===== Menú de Usuario (flecha abre, nombre navega) =====
     (function(){
-      const menu=document.getElementById('userMenu');
+      const menu     = document.getElementById('userMenu');
       if(!menu) return;
-      const btn=menu.querySelector('.user-btn');
-      btn.addEventListener('click', (e)=>{
+
+      const caretBtn = document.getElementById('userCaret');
+      const dropdown = menu.querySelector('.user-dd');
+
+      function close(){ menu.classList.remove('open'); caretBtn?.setAttribute('aria-expanded','false'); }
+      function toggle(e){
         e.stopPropagation();
-        menu.classList.toggle('open');
-      });
-      menu.querySelector('.user-dd').addEventListener('click', (e)=>e.stopPropagation());
-      document.addEventListener('click', ()=>menu.classList.remove('open'));
+        const open = menu.classList.toggle('open');
+        caretBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      caretBtn?.addEventListener('click', toggle);
+      dropdown?.addEventListener('click', (e)=> e.stopPropagation());
+      document.addEventListener('click', (e)=>{ if(!menu.contains(e.target)) close(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
     })();
 
     // ===== Modales AJAX =====
