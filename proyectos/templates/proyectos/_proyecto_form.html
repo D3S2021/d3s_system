@@ -11,6 +11,7 @@
         }
       })(this)">
   {% csrf_token %}
+  <input type="hidden" name="ajax" value="1">
 
   <div class="modal-body-content">
     <div class="form-grid">
@@ -162,7 +163,7 @@
         });
         if (Array.isArray(data.miembros_ids)) {
           const ids = data.miembros_ids.map(String);
-          document.querySelectorAll('input[name="miestros"]').forEach(cb => {
+          document.querySelectorAll('input[name="miembros"]').forEach(cb => {
             cb.checked = ids.includes(cb.value);
           });
         }

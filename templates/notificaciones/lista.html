@@ -82,7 +82,8 @@
 
           <div class="actions">
             {% if n.url %}
-              <a class="btn btn-sm" href="{{ n.url }}">Ir al detalle</a>
+              <!-- Agregamos ?asModal=1 (el script abajo corrige a &asModal=1 si ya hay querystring) -->
+              <a class="btn btn-sm asmodal-link" href="{{ n.url }}?asModal=1">Ir al detalle</a>
             {% endif %}
           </div>
         </div>
@@ -92,4 +93,19 @@
     <p style="color:#64748b">No tenés notificaciones.</p>
   {% endif %}
 </div>
+
+<script>
+  // Aseguramos que todos los links de detalle usen ?asModal=1 (o &asModal=1 si ya hay query)
+  (function(){
+    document.querySelectorAll('.asmodal-link').forEach(a=>{
+      let href = a.getAttribute('href') || '';
+      if (!href) return;
+      // Evitar duplicar si ya está
+      if (/[\?&]asModal=1\b/.test(href)) return;
+      if (href.includes('?')) href += '&asModal=1';
+      else href += '?asModal=1';
+      a.setAttribute('href', href);
+    });
+  })();
+</script>
 {% endblock %}

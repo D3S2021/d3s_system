@@ -44,6 +44,7 @@ class Transaccion(models.Model):
             ("can_validate_transactions", "Puede validar transacciones de economía"),
             ("can_add_ingresos", "Puede registrar ingresos en economía"),
             ("can_edit_own_transactions", "Puede editar sus propias transacciones pendientes"),
+            ("view_dashboard", "Puede ver el dashboard de Economía"),
         ]
 
     def __str__(self):

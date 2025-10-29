@@ -51,13 +51,13 @@
     position:fixed;
     inset:0;
     background:rgba(0,0,0,.45);
-    display:none;
+    display:none;                 /* 🔧 default oculto */
     z-index:1200;
-    overflow:auto;                 /* el overlay scrollea si hace falta */
+    overflow:auto;                /* el overlay scrollea si hace falta */
     padding:24px;
-    display:flex;align-items:center;justify-content:center;
+    align-items:center;justify-content:center;
   }
-  .modal-overlay.open{display:flex}
+  .modal-overlay.open{display:flex} /* 🔧 se muestra al abrir */
 
   .modal{
     background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);
@@ -297,5 +297,18 @@ function hookProyectoForm(){
     .catch(()=> alert('Error de red al guardar.'));
   });
 }
+
+/* ===== Abrir modal de TAREA automáticamente si viene desde notificación ===== */
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(location.search);
+  const openTask = params.get('open_task');
+  if (openTask){
+    // Carga el DETALLE de la tarea en modal
+    const url = "{% url 'proyectos:tarea_detalle_modal' 0 %}".replace('0', openTask);
+    openModal('Detalle de tarea', url);
+    // limpia el query param para que no se reabra en refresh
+    history.replaceState({}, '', location.pathname);
+  }
+});
 </script>
 {% endblock %}

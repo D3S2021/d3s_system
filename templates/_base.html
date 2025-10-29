@@ -22,8 +22,9 @@
     .notif-dropdown{
       display:none; position:absolute; top:24px; right:0;
       width:320px; background:#fff; border:1px solid #ddd;
-      border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.15);
-      z-index:1000; color:#2c3e50;
+      border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.2);
+      z-index: 2000; /* ↑ por encima del header del admin */
+      color:#2c3e50;
     }
     .notif-dropdown.is-open{ display:block; }
     .notif-dropdown header{
@@ -68,9 +69,9 @@
       box-shadow:0 10px 30px rgba(0,0,0,.12);
       padding:6px 0;
       display:none;
-      z-index:1000;
+      z-index:2000;
       animation:fadeIn .15s ease;
-      overflow:hidden;  /* ✅ evita que el hover sobresalga */
+      overflow:hidden;
     }
     .user-menu.open .user-dd{ display:block; }
 
@@ -86,30 +87,22 @@
       background:#f1f5f9;
       color:#0f172a;
     }
-
-    .user-dd .divider{
-      border-top:1px solid #000000; margin:6px 0;
-    }
+    .user-dd .divider{ border-top:1px solid #000000; margin:6px 0; }
 
     @keyframes fadeIn{
       from{opacity:0; transform:translateY(-4px);}
       to{opacity:1; transform:translateY(0);}
     }
 
-    /* --- FIX: forzar color oscuro dentro del dropdown del usuario
-       (admin/base.css pinta #user-tools a blanco) --- */
+    /* Forzar color oscuro dentro del dropdown del usuario (el admin lo pone blanco) */
     #user-tools .user-dd a,
     #user-tools .user-dd a:link,
-    #user-tools .user-dd a:visited{
-      color:#1e293b !important;
-    }
-    #user-tools .user-dd a:hover{
-      color:#0f172a !important;
-    }
+    #user-tools .user-dd a:visited{ color:#1e293b !important; }
+    #user-tools .user-dd a:hover{ color:#0f172a !important; }
 
     /* ===== Modal ===== */
     .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45);
-      display:none; align-items:center; justify-content:center; z-index:1200; }
+      display:none; align-items:center; justify-content:center; z-index:2200; }
     .modal-overlay.open{ display:flex; }
     .modal{
       width:min(520px, 92vw); max-height:88vh; overflow:auto; background:#fff;
@@ -235,43 +228,61 @@
   <script>
     // ===== Notificaciones =====
     (function(){
-      const btn = document.getElementById('notifBell');
+      const btn  = document.getElementById('notifBell');
       const menu = document.getElementById('notifMenu');
       if (!btn || !menu) return;
-      function closeMenu(){ menu.classList.remove('is-open'); btn.setAttribute('aria-expanded','false'); }
-      function toggleMenu(e){ e.stopPropagation(); const open = menu.classList.toggle('is-open'); btn.setAttribute('aria-expanded',open?'true':'false'); }
-      btn.addEventListener('click',toggleMenu);
-      document.addEventListener('click',(e)=>{ if(!menu.contains(e.target)&&e.target!==btn) closeMenu(); });
-      document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeMenu(); });
+
+      function closeMenu(){
+        menu.classList.remove('is-open');
+        btn.setAttribute('aria-expanded','false');
+      }
+      function toggleMenu(e){
+        e.stopPropagation();                   // evita que el click burbujee al document
+        const open = menu.classList.toggle('is-open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+
+      // Evitar que clicks dentro del dropdown lo cierren al instante
+      menu.addEventListener('click', function(e){ e.stopPropagation(); });
+
+      btn.addEventListener('click', toggleMenu);
+      document.addEventListener('click', (e)=>{
+        if(!menu.contains(e.target) && e.target !== btn) closeMenu();
+      });
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
     })();
 
     // ===== Menú de Usuario =====
     (function(){
       const menu=document.getElementById('userMenu');
-      if(!menu)return;
+      if(!menu) return;
       const btn=menu.querySelector('.user-btn');
-      btn.addEventListener('click',()=>menu.classList.toggle('open'));
-      document.addEventListener('click',(e)=>{if(!menu.contains(e.target))menu.classList.remove('open');});
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        menu.classList.toggle('open');
+      });
+      menu.querySelector('.user-dd').addEventListener('click', (e)=>e.stopPropagation());
+      document.addEventListener('click', ()=>menu.classList.remove('open'));
     })();
 
     // ===== Modales AJAX =====
     (function(){
       const editBtn=document.getElementById('openEditName');
-      const pwdBtn=document.getElementById('openChangePwd');
+      const pwdBtn =document.getElementById('openChangePwd');
       const editOv=document.getElementById('modalEditName');
-      const pwdOv=document.getElementById('modalChangePwd');
+      const pwdOv =document.getElementById('modalChangePwd');
       const editCt=document.getElementById('editNameContainer');
-      const pwdCt=document.getElementById('changePwdContainer');
+      const pwdCt =document.getElementById('changePwdContainer');
 
-      function openModal(ov){ov.classList.add('open');ov.setAttribute('aria-hidden','false');}
-      function closeModal(ov){ov.classList.remove('open');ov.setAttribute('aria-hidden','true');}
+      function openModal(ov){ ov.classList.add('open'); ov.setAttribute('aria-hidden','false'); }
+      function closeModal(ov){ ov.classList.remove('open'); ov.setAttribute('aria-hidden','true'); }
 
       // cerrar con la X y clic fuera
       document.querySelectorAll('.btn-close').forEach(b=>{
         b.addEventListener('click',()=>closeModal(document.querySelector(b.dataset.close)));
       });
       [editOv,pwdOv].forEach(ov=>{
-        ov.addEventListener('click',(e)=>{if(e.target===ov)closeModal(ov);});
+        ov.addEventListener('click',(e)=>{ if(e.target===ov) closeModal(ov); });
       });
 
       if(editBtn){

@@ -44,5 +44,7 @@ urlpatterns = [
 
     path("tareas/<int:pk>/chat/enviar/", views.tarea_chat_enviar, name="tarea_chat_enviar"),
 
+    path("tareas/open/<int:pk>/", views.tarea_open, name="tarea_open"),
+
 
 ]

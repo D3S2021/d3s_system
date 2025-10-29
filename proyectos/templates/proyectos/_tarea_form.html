@@ -4,6 +4,8 @@
       action="{{ action_url|default:'' }}"
       class="tarea-form">
   {% csrf_token %}
+  <!-- fuerza tratar como AJAX aunque el fetch no ponga el header -->
+  <input type="hidden" name="ajax" value="1">
 
   <div class="grid">
     <div class="field">

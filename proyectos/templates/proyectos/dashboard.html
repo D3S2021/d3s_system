@@ -36,7 +36,7 @@
       .modal{ width:clamp(560px, 64vw, 720px); max-width:720px; background:#fff; border-radius:12px; box-shadow:0 10px 35px rgba(0,0,0,.25); display:flex; flex-direction:column; overflow:hidden; }
       .modal-header{ display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #eee; }
       .modal-title{ margin:0; font-size:18px; font-weight:700; color:#1e293b; }
-      .modal-body{ padding:16px 18px; max-height:72vh; overflow:auto; }  /* <- para que no crezca infinito */
+      .modal-body{ padding:16px 18px; max-height:72vh; overflow:auto; }
       .btn-close{ border:none; background:transparent; font-size:22px; line-height:1; cursor:pointer; color:#666; }
     </style>
 
@@ -73,7 +73,6 @@
                       data-title="Tarea: {{ t.titulo|escapejs }}">
                       Ver
                     </button>
-
                   </td>
                 </tr>
               {% endfor %}
@@ -147,13 +146,12 @@
     </div>
   </div>
 
-  {# ===================== SCRIPTS embebidos (para evitar problemas de bloques) ===================== #}
+  {# ===================== SCRIPTS embebidos ===================== #}
   <script>
     (function(){
       // URLs desde Django
       const NUEVO_PROY_URL = "{% url 'proyectos:nuevo' %}";
 
-      // ---------- Utilidades modal genérico ----------
       const $ = (sel, ctx=document) => ctx.querySelector(sel);
 
       // ----- Modal general de tareas -----
@@ -162,7 +160,6 @@
       const modalGeneralContainer = $("#modalGeneralContainer");
       const btnCloseGeneral = $("#btnCloseGeneral");
 
-      // === NUEVO: enganchar chat al cargar el partial ===
       function attachChatHandlers(){
         const form = $("#chatForm", modalGeneralContainer);
         const list = $("#chatList", modalGeneralContainer);
@@ -214,10 +211,10 @@
         modalGeneral.setAttribute("aria-hidden","false");
         modalGeneralTitle.textContent = title || "Detalle";
         modalGeneralContainer.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
-        const bust = url + (url.includes('?') ? '&' : '?') + '_ts=' + Date.now();   // ← 🔧
+        const bust = url + (url.includes('?') ? '&' : '?') + '_ts=' + Date.now();
         fetch(bust, { headers: { "X-Requested-With": "XMLHttpRequest" } })
           .then(r => r.text())
-          .then(html => { modalGeneralContainer.innerHTML = html; attachChatHandlers(); })  // <- engancha chat
+          .then(html => { modalGeneralContainer.innerHTML = html; attachChatHandlers(); })
           .catch(() => { modalGeneralContainer.innerHTML = '<p style="color:#a00">No se pudo cargar el contenido.</p>'; });
       }
       function closeGeneral(){
@@ -268,9 +265,19 @@
         const btnCancel = $("#btnCancelarProyecto", modalProyectoContainer);
         if (btnCancel) btnCancel.addEventListener("click", closeNuevoProyecto);
         if (!form) return;
+
+        // ⬅️ Fallback: si el partial vino sin action, forzar la URL correcta
+        if (!form.getAttribute('action') || form.getAttribute('action') === '') {
+          form.setAttribute('action', NUEVO_PROY_URL);
+        }
+
         form.addEventListener("submit", function(e){
           e.preventDefault();
           const formData = new FormData(form);
+
+          // Enviamos como AJAX SIEMPRE:
+          formData.set('ajax', '1');
+
           const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || '';
           fetch(form.action, {
             method: 'POST',
@@ -294,7 +301,6 @@
           .catch(() => alert('Error de red al guardar.'));
         });
       }
-
     })();
   </script>
 {% endblock %}

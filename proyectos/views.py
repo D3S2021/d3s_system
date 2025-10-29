@@ -1,10 +1,13 @@
 # proyectos/views.py
-from datetime import timedelta
+from datetime import timedelta, datetime, date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum, Case, When, IntegerField
+from django.db.models import (
+    Q, Sum, Case, When, IntegerField, Max, Count, Value, CharField
+)
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -22,6 +25,7 @@ from .forms import (
     HoraTrabajoForm,
 )
 
+# Notificaciones opcionales
 try:
     from notificaciones.models import Notificacion
 except Exception:
@@ -29,8 +33,17 @@ except Exception:
 
 
 # ===========================
-# Helpers (cards + permisos)
+# Helpers
 # ===========================
+def _is_ajax(request) -> bool:
+    """True si es una llamada AJAX (header clásico) o si nos marcan 'ajax=1'."""
+    return (
+        request.headers.get("x-requested-with", "").lower() == "xmlhttprequest"
+        or request.POST.get("ajax") == "1"
+        or request.GET.get("ajax") == "1"
+    )
+
+
 def _vencimientos_counter() -> int:
     hoy = now().date()
     limite_7 = hoy + timedelta(days=7)
@@ -72,12 +85,10 @@ def _puede_tocar_proyecto(user, proyecto: Proyecto) -> bool:
 # ===========================
 # Dashboard con tabs
 # ===========================
-
 @login_required
 def dashboard(request):
     tab = request.GET.get("tab", "vencimientos")
     ctx = {"counts": _counts(), "current_tab": tab}
-    # Para el selector de "Duplicar proyecto" en el modal
     ctx["proyectos_existentes"] = Proyecto.objects.order_by("-creado_en")[:200]
 
     if tab == "planificados":
@@ -91,27 +102,23 @@ def dashboard(request):
     elif tab == "todos":
         ctx["items"] = Proyecto.objects.filter(is_archivado=False).order_by("-creado_en")
     else:
-        # === VENCIMIENTOS: TODAS LAS TAREAS CON FECHA, AGRUPADAS POR PROYECTO ===
         from itertools import groupby
 
         qs = (
             Tarea.objects
             .select_related("proyecto", "asignado_a", "proyecto__responsable")
-            .filter(
-                proyecto__is_archivado=False,
-                vence_el__isnull=False,        # no solo “próximos”: todas las con fecha
-            )
+            .filter(proyecto__is_archivado=False, vence_el__isnull=False)
             .order_by("proyecto__nombre", "proyecto_id", "vence_el", "id")
         )
 
         grupos = []
-        for (pid, pnombre, pcierre), tareas in groupby(
+        for (pid, pnombre, _), tareas in groupby(
             qs, key=lambda t: (t.proyecto_id, t.proyecto.nombre, t.proyecto.fecha_fin)
         ):
             tareas = list(tareas)
             grupos.append({
                 "proyecto": tareas[0].proyecto,
-                "fecha_cierre": tareas[0].proyecto.fecha_fin,  # puede ser None
+                "fecha_cierre": tareas[0].proyecto.fecha_fin,
                 "tareas": tareas,
             })
 
@@ -176,6 +183,7 @@ def proyecto_detalle(request, pk):
     for t in tareas_qs:
         cols.setdefault(t.estado, []).append(t)
 
+    # Si venimos de una notificación con ?open_task=<id>, el JS abrirá el modal
     return render(request, "proyectos/detalle.html", {
         "proyecto": proyecto,
         "estados": estados,
@@ -239,11 +247,17 @@ def proyecto_facturacion(request, pk):
 def proyecto_crear(request):
     """
     - GET  AJAX → devuelve HTML parcial del formulario (para el modal).
-    - POST AJAX → devuelve JSON {ok: True, redirect: "..."} si guardó,
-                  o {ok: False, html: "..."} con el form con errores.
-    - Fallback no-AJAX → render normal de página.
+    - POST AJAX → devuelve JSON {ok: True, redirect: "..."} si guardó.
+    - Fallback no-AJAX → render/redirect normal.
     """
-    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    # Helper robusto para detectar AJAX:
+    def _is_ajax(req):
+        return (
+            req.headers.get("x-requested-with", "").lower() == "xmlhttprequest"
+            or (req.POST.get("ajax") == "1")  # por si el browser bloquea headers
+        )
+
+    is_ajax = _is_ajax(request)
 
     if request.method == "POST":
         form = ProyectoForm(request.POST, request.FILES)
@@ -263,7 +277,15 @@ def proyecto_crear(request):
         if is_ajax:
             html = render_to_string(
                 "proyectos/_proyecto_form.html",
-                {"form": form},
+                {
+                    "form": form,
+                    # ⬇️ MUY IMPORTANTE: pasar action_url para que el <form> tenga destino correcto
+                    "action_url": reverse("proyectos:nuevo"),
+                    "submit_label": "Crear proyecto",
+                    # (Opcional) datos para el selector "Duplicar de"
+                    "mostrar_duplicar": True,
+                    "proyectos_existentes": Proyecto.objects.order_by("-creado_en")[:200],
+                },
                 request=request,
             )
             return JsonResponse({"ok": False, "html": html}, status=400)
@@ -275,7 +297,14 @@ def proyecto_crear(request):
     if is_ajax:
         html = render_to_string(
             "proyectos/_proyecto_form.html",
-            {"form": form},
+            {
+                "form": form,
+                # ⬇️ clave: que el partial lleve action correcto
+                "action_url": reverse("proyectos:nuevo"),
+                "submit_label": "Crear proyecto",
+                "mostrar_duplicar": True,
+                "proyectos_existentes": Proyecto.objects.order_by("-creado_en")[:200],
+            },
             request=request,
         )
         return HttpResponse(html)
@@ -319,24 +348,14 @@ def proyecto_editar(request, pk):
 
 @login_required
 def editar_modal(request, pk: int):
-    """
-    GET: devuelve el HTML del form para el modal.
-    POST: guarda y devuelve JSON.
-    """
+    """GET: devuelve el form para modal. POST: guarda y devuelve JSON."""
     proyecto = get_object_or_404(_qs_permitidos(request), pk=pk)
-
-    # Construimos la URL con kwargs para asegurar el pk
     action_url = reverse("proyectos:editar_modal", kwargs={"pk": proyecto.pk})
 
     def render_form(form):
         html = render_to_string(
             "proyectos/_proyecto_form.html",
-            {
-                "form": form,
-                "action_url": action_url,
-                "submit_label": "Guardar cambios",
-                "mostrar_duplicar": False,
-            },
+            {"form": form, "action_url": action_url, "submit_label": "Guardar cambios", "mostrar_duplicar": False},
             request=request,
         )
         return html
@@ -345,7 +364,6 @@ def editar_modal(request, pk: int):
         form = ProyectoForm(instance=proyecto)
         return HttpResponse(render_form(form))
 
-    # POST (AJAX)
     form = ProyectoForm(request.POST, request.FILES, instance=proyecto)
     if form.is_valid():
         form.save()
@@ -418,8 +436,7 @@ def proyecto_reabrir(request, pk):
     if request.method == "POST":
         form = ReaperturaForm(request.POST)
         if form.is_valid():
-            faltan = []
-            updates = []
+            faltan, updates = [], []
             for t in pendientes:
                 key = f"vence_el_{t.id}"
                 raw = (request.POST.get(key) or "").strip()
@@ -455,7 +472,7 @@ def proyecto_reabrir(request, pk):
                                 user=t.asignado_a,
                                 titulo=f"Tarea reabierta: {t.titulo}",
                                 cuerpo=f"Nuevo vencimiento: {t.vence_el:%d/%m/%Y} (Proyecto {proyecto.nombre})",
-                                url=f"/proyectos/{proyecto.id}/",
+                                url=reverse("proyectos:tarea_open", args=[t.id]),
                             )
                 messages.success(request, "Proyecto reabierto y tareas actualizadas.")
                 return redirect("proyectos:detalle", pk=pk)
@@ -478,73 +495,83 @@ def _exclude_admin(form):
 @login_required
 def tarea_crear(request, proyecto_id):
     proyecto = get_object_or_404(_qs_permitidos(request), pk=proyecto_id)
+    is_ajax = (request.headers.get("x-requested-with") or "").lower() == "xmlhttprequest"
 
-    # GET para modal
+    # GET → devolver el formulario (partial) para el modal
     if request.method == "GET" and request.GET.get("modal") == "1":
         form = TareaForm()
         _exclude_admin(form)
-        html = render_to_string("proyectos/_tarea_form.html", {"form": form}, request=request)
+        html = render_to_string(
+            "proyectos/_tarea_form.html",
+            {
+                "form": form,
+                # ✅ le pasamos action_url para que el <form> sepa a dónde POSTear
+                "action_url": reverse("proyectos:tarea_crear", args=[proyecto.id]),
+                "submit_label": "Crear tarea",
+            },
+            request=request,
+        )
         return HttpResponse(html)
 
-    # POST (guardar)
+    # POST → guardar
     if request.method == "POST":
         form = TareaForm(request.POST)
         _exclude_admin(form)
-        try:
-            if form.is_valid():
-                t = form.save(commit=False)
-                t.proyecto = proyecto
-                t.creado_por = request.user
-                t.save()
+        if form.is_valid():
+            t = form.save(commit=False)
+            t.proyecto = proyecto
+            t.creado_por = request.user
+            t.save()
 
-                # Notificación / historial
-                if Notificacion and t.asignado_a:
-                    Notificacion.objects.create(
-                        user=t.asignado_a,
-                        titulo=f"Nueva tarea en {proyecto.nombre}",
-                        cuerpo=f"{t.titulo}",
-                        url=f"/proyectos/{proyecto.id}/",
-                    )
-                HistorialProyecto.objects.create(
-                    proyecto=proyecto,
-                    tipo="estado_tarea",
-                    actor=request.user,
-                    descripcion=f"Creada tarea '{t.titulo}' (estado {t.get_estado_display()}).",
+            # Notificación / historial
+            if Notificacion and t.asignado_a:
+                Notificacion.objects.create(
+                    user=t.asignado_a,
+                    titulo=f"Nueva tarea en {proyecto.nombre}",
+                    cuerpo=f"{t.titulo}",
+                    url=reverse("proyectos:tarea_open", args=[t.id]),  # abre modal en destino
                 )
+            HistorialProyecto.objects.create(
+                proyecto=proyecto,
+                tipo="estado_tarea",
+                actor=request.user,
+                descripcion=f"Creada tarea '{t.titulo}' (estado {t.get_estado_display()}).",
+            )
 
-                if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                    return JsonResponse({"ok": True})
-                messages.success(request, "Tarea creada.")
-                return redirect("proyectos:detalle", pk=proyecto.id)
+            if is_ajax:
+                return JsonResponse({"ok": True})
+            messages.success(request, "Tarea creada.")
+            return redirect("proyectos:detalle", pk=proyecto.id)
 
-            # errores de validación
-            if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                html = render_to_string("proyectos/_tarea_form.html", {"form": form}, request=request)
-                return JsonResponse({"ok": False, "html": html}, status=400)
-
-        except Exception as e:
-            if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                return JsonResponse({"ok": False, "error": str(e)}, status=500)
-            raise
+        # inválido → devolvemos el partial con errores si es AJAX
+        if is_ajax:
+            html = render_to_string(
+                "proyectos/_tarea_form.html",
+                {
+                    "form": form,
+                    "action_url": reverse("proyectos:tarea_crear", args=[proyecto.id]),
+                    "submit_label": "Crear tarea",
+                },
+                request=request,
+            )
+            return JsonResponse({"ok": False, "html": html}, status=400)
 
     # fallback
     return redirect("proyectos:detalle", pk=proyecto.id)
+
 
 @login_required
 def tarea_detalle_modal(request, pk: int):
     """
     Devuelve el HTML del detalle de la tarea (partial) para el modal.
-    Incluye el histórico de mensajes y un flag de permiso para chatear.
-    Forzamos no-cache para que, al reabrir el modal, se vean los mensajes nuevos.
+    Incluye histórico de mensajes y flag de permiso para chatear.
     """
     tarea = get_object_or_404(
         Tarea.objects.select_related("proyecto", "asignado_a"),
         pk=pk
     )
-    # Chequeo de acceso al proyecto
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
 
-    # 🔧 Cambiado: no dependemos de related_name; traemos comentarios explícitamente
     mensajes = (
         Comentario.objects
         .select_related("autor")
@@ -564,7 +591,6 @@ def tarea_detalle_modal(request, pk: int):
         request=request,
     )
     resp = HttpResponse(html)
-    # 🔧 No-cache agresivo para evitar respuestas viejas en el modal
     resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp["Pragma"] = "no-cache"
     resp["Expires"] = "0"
@@ -573,18 +599,10 @@ def tarea_detalle_modal(request, pk: int):
 
 @login_required
 def tarea_chat_enviar(request, pk: int):
-    """
-    Recibe POST (AJAX) con 'mensaje' y crea un Comentario en la tarea.
-    Devuelve JSON: {ok: True, html: "<li class='msg ...'>...</li>"} para append en el chat.
-    """
-    tarea = get_object_or_404(
-        Tarea.objects.select_related("proyecto"),
-        pk=pk
-    )
-    # Chequeo de permisos de acceso al proyecto
+    """POST AJAX con 'mensaje' → crea Comentario y devuelve el li renderizado."""
+    tarea = get_object_or_404(Tarea.objects.select_related("proyecto"), pk=pk)
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
 
-    # Permisos de chat: admin de proyectos, responsable del proyecto o asignado a la tarea
     puede_chatear = (
         request.user.has_perm("proyectos.can_manage_proyectos")
         or (tarea.proyecto and tarea.proyecto.responsable_id == request.user.id)
@@ -600,21 +618,14 @@ def tarea_chat_enviar(request, pk: int):
     if not cuerpo:
         return JsonResponse({"ok": False, "error": "Escribí un mensaje."}, status=400)
 
-    # Crear el comentario
     msg = Comentario.objects.create(tarea=tarea, autor=request.user, cuerpo=cuerpo)
 
-    # Render del item HTML del mensaje (li) para insertarlo directo en la lista
-    html = render_to_string(
-        "proyectos/_tarea_chat_message.html",
-        {"m": msg},
-        request=request,
-    )
-
-    # Indicamos no-cache por si algún proxy guarda la respuesta del POST
+    html = render_to_string("proyectos/_tarea_chat_message.html", {"m": msg}, request=request)
     response = JsonResponse({"ok": True, "html": html})
     response["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response["Pragma"] = "no-cache"
     return response
+
 
 @login_required
 def tarea_editar(request, pk):
@@ -624,7 +635,6 @@ def tarea_editar(request, pk):
     - Fallback      → redirect al detalle.
     """
     tarea = get_object_or_404(Tarea.objects.select_related("proyecto"), pk=pk)
-    # Chequeo de permisos por proyecto
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
 
     def _render(form):
@@ -643,6 +653,7 @@ def tarea_editar(request, pk):
 
     # POST (guardar)
     if request.method == "POST":
+        is_ajax = _is_ajax(request)
         form = TareaForm(request.POST, instance=tarea)
         _exclude_admin(form)
         if form.is_valid():
@@ -654,7 +665,7 @@ def tarea_editar(request, pk):
                     user=t.asignado_a,
                     titulo=f"Tarea actualizada en {t.proyecto.nombre}",
                     cuerpo=f"{t.titulo}",
-                    url=f"/proyectos/{t.proyecto.id}/",
+                    url=reverse("proyectos:tarea_open", args=[t.id]),
                 )
             if antes != t.estado:
                 HistorialProyecto.objects.create(
@@ -662,13 +673,13 @@ def tarea_editar(request, pk):
                     descripcion=f"Cambio de estado: '{t.titulo}' {antes} → {t.estado}."
                 )
 
-            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            if is_ajax:
                 return JsonResponse({"ok": True})
             messages.success(request, "Tarea actualizada.")
             return redirect("proyectos:detalle", pk=t.proyecto_id)
 
         # inválido
-        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        if is_ajax:
             return JsonResponse({"ok": False, "html": _render(form)}, status=400)
 
     # fallback
@@ -693,7 +704,7 @@ def tarea_cambiar_estado(request, pk):
                 user=tarea.proyecto.responsable,
                 titulo=f"Estado de tarea cambiado",
                 cuerpo=f"{tarea.titulo}: {antes} → {tarea.estado} (Proyecto {tarea.proyecto.nombre})",
-                url=f"/proyectos/{tarea.proyecto.id}/",
+                url=reverse("proyectos:tarea_open", args=[tarea.id]),
             )
         messages.success(request, "Estado actualizado.")
 
@@ -796,13 +807,12 @@ def kanban_proyecto(request, pk):
 def horas_nueva(request):
     """
     Modal de carga de horas. En GET AJAX devolvemos HTML.
-    En POST AJAX devolvemos JSON. Se exige SIEMPRE cargar inicio y fin,
-    y las 'horas' se calculan a partir de esos dos campos.
+    En POST AJAX devolvemos JSON. Se exige SIEMPRE cargar inicio y fin.
     """
     puede_asignar = (
         request.user.has_perm("proyectos.can_manage_proyectos") or request.user.is_staff
     )
-    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    is_ajax = _is_ajax(request)
 
     preselect_proyecto_id = request.GET.get("proyecto")
 
@@ -817,9 +827,8 @@ def horas_nueva(request):
             if not puede_asignar:
                 obj.usuario = request.user
 
-            # === Validación obligatoria de INICIO y FIN ===
             inicio = form.cleaned_data.get("inicio")
-            fin    = form.cleaned_data.get("fin")
+            fin = form.cleaned_data.get("fin")
 
             if not inicio:
                 form.add_error("inicio", "Este campo es obligatorio.")
@@ -827,10 +836,7 @@ def horas_nueva(request):
                 form.add_error("fin", "Este campo es obligatorio.")
 
             if inicio and fin:
-                # asegurar orden
-                from datetime import datetime, date
                 if isinstance(inicio, str) or isinstance(fin, str):
-                    # si tu form devuelve strings "HH:MM"
                     try:
                         ini_dt = datetime.strptime(inicio.strip(), "%H:%M")
                         fin_dt = datetime.strptime(fin.strip(), "%H:%M")
@@ -839,7 +845,6 @@ def horas_nueva(request):
                         form.add_error(None, "Formato de hora inválido. Usá HH:MM.")
                         delta_h = None
                 else:
-                    # si tu form devuelve datetime.time
                     ini_dt = datetime.combine(date.today(), inicio)
                     fin_dt = datetime.combine(date.today(), fin)
                     total_secs = (fin_dt - ini_dt).total_seconds()
@@ -851,21 +856,17 @@ def horas_nueva(request):
                     else:
                         obj.horas = round(delta_h, 2)
 
-            # Si quedaron errores de validación, devolver el form
             if form.errors or obj.horas is None:
                 if obj.horas is None and not form.errors:
                     form.add_error(None, "Debés completar Inicio y Fin para calcular las horas.")
                 if is_ajax:
-                    html = render_to_string(
-                        "proyectos/_horas_form.html",
-                        {"form": form, "puede_asignar": puede_asignar},
-                        request=request,
-                    )
+                    html = render_to_string("proyectos/_horas_form.html",
+                                            {"form": form, "puede_asignar": puede_asignar},
+                                            request=request)
                     return JsonResponse({"ok": False, "html": html}, status=400)
                 return render(request, "proyectos/horas_form.html", {
                     "form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar,
                 })
-            # === /Validación ===
 
             obj.save()
             if is_ajax:
@@ -873,13 +874,10 @@ def horas_nueva(request):
             messages.success(request, "Horas cargadas.")
             return redirect("proyectos:horas_mias")
 
-        # inválido (errores de Django form)
         if is_ajax:
-            html = render_to_string(
-                "proyectos/_horas_form.html",
-                {"form": form, "puede_asignar": puede_asignar},
-                request=request,
-            )
+            html = render_to_string("proyectos/_horas_form.html",
+                                    {"form": form, "puede_asignar": puede_asignar},
+                                    request=request)
             return JsonResponse({"ok": False, "html": html}, status=400)
 
     else:
@@ -896,14 +894,11 @@ def horas_nueva(request):
             initial=initial,
         )
         if is_ajax:
-            html = render_to_string(
-                "proyectos/_horas_form.html",
-                {"form": form, "puede_asignar": puede_asignar},
-                request=request,
-            )
+            html = render_to_string("proyectos/_horas_form.html",
+                                    {"form": form, "puede_asignar": puede_asignar},
+                                    request=request)
             return HttpResponse(html)
 
-    # Fallback no-AJAX
     return render(request, "proyectos/horas_form.html", {
         "form": form,
         "titulo": "Cargar horas",
@@ -911,41 +906,19 @@ def horas_nueva(request):
     })
 
 
-# views.py
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Max, Count, Value, CharField
-from django.db.models.functions import Coalesce
-from django.shortcuts import render
-
 @login_required
 def horas_mias(request):
-    """
-    Agrupa las horas del usuario por Proyecto/Área mostrando:
-    - nombre del grupo (proyecto o área)
-    - última fecha cargada (MAX(fecha))
-    - total de horas (SUM(horas))
-    - cantidad de registros
-    """
     qs = (HoraTrabajo.objects
           .select_related("proyecto", "tarea")
           .filter(usuario=request.user))
 
-    # Ajustá "area" si tu modelo no tiene ese campo; si no existe, podés eliminarlo del Coalesce.
     agrupado = (
         qs.annotate(
-            grupo_nombre=Coalesce(           # nombre de proyecto o, si no hay, área o "—"
-                "proyecto__nombre",
-                Value("—"),
-                output_field=CharField()
-            ),
-            pid=Coalesce("proyecto_id", Value(0))
+            grupo_nombre=Coalesce("proyecto__nombre", Value("—"), output_field=CharField()),
+            pid=Coalesce("proyecto_id", Value(0)),
         )
         .values("pid", "grupo_nombre")
-        .annotate(
-            total_horas=Sum("horas"),        # <-- si tu campo es otro (p.ej. "cantidad"), cámbialo aquí
-            ultima=Max("fecha"),
-            n_reg=Count("id"),
-        )
+        .annotate(total_horas=Sum("horas"), ultima=Max("fecha"), n_reg=Count("id"))
         .order_by("-ultima", "grupo_nombre")
     )
 
@@ -953,7 +926,6 @@ def horas_mias(request):
         "titulo": "Mis horas",
         "agrupado": agrupado,
     })
-
 
 
 @login_required
@@ -992,3 +964,19 @@ def horas_rechazar(request, pk):
     h.save(update_fields=["estado", "aprobada_por", "aprobada_en", "actualizado_en"])
     messages.warning(request, "Hora rechazada.")
     return redirect(request.META.get("HTTP_REFERER") or "proyectos:horas_economia")
+
+
+# ===========================
+# Item C: redirección que abre el modal de tarea
+# ===========================
+@login_required
+def tarea_open(request, pk: int):
+    """
+    Redirige a la página del proyecto con ?open_task=<pk>.
+    El front debe detectar ese query param y abrir el modal
+    llamando a `tarea_detalle_modal`.
+    """
+    tarea = get_object_or_404(Tarea.objects.select_related("proyecto"), pk=pk)
+    _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
+    url = reverse("proyectos:detalle", args=[tarea.proyecto_id]) + f"?open_task={tarea.id}"
+    return redirect(url)

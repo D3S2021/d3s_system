@@ -41,9 +41,28 @@
 
     {% if n.url %}
       <div style="margin-top:12px">
-        <a class="btn btn-primary" href="{{ n.url }}">Ir al detalle relacionado</a>
+        <!-- Agregamos ?asModal=1 para que lo intercepte el modal global -->
+        <a class="btn btn-primary js-asmodal"
+           href="{{ n.url }}?asModal=1">Ir al detalle relacionado</a>
       </div>
     {% endif %}
   </div>
 </div>
+
+{% if n.url %}
+<script>
+  // Si el enlace ya trae querystring, usamos &asModal=1
+  (function(){
+    const a = document.querySelector('.js-asmodal');
+    if(!a) return;
+    let href = a.getAttribute('href');
+    // Evitar duplicado si ya lo tiene
+    if (!/[\?&]asModal=1\b/.test(href)) {
+      if(href.includes('?')) href += '&asModal=1';
+      else href += '?asModal=1';
+      a.setAttribute('href', href);
+    }
+  })();
+</script>
+{% endif %}
 {% endblock %}
