@@ -311,9 +311,10 @@ def eliminar_transaccion(request, pk):
 def transacciones_pendientes(request):
     """
     Bandeja de 'Transacciones pendientes' (solo validadores).
-    Permite aprobar con categorización o rechazar con comentario (y notificación).
+    Ahora carga categorías de INGRESOS y de GASTOS y permite aprobar con cualquiera.
     """
     categorias_gasto = Categoria.objects.filter(activo=True, tipo="gasto").order_by("nombre")
+    categorias_ingreso = Categoria.objects.filter(activo=True, tipo="ingreso").order_by("nombre")
 
     if request.method == "POST":
         tx_id = request.POST.get("tx_id")
@@ -323,10 +324,18 @@ def transacciones_pendientes(request):
         if accion == "aprobar":
             cat_id = request.POST.get("categoria_id")
             try:
-                categoria = Categoria.objects.get(pk=cat_id, activo=True, tipo="gasto")
+                # 👇 ya NO filtramos por tipo; aceptamos cualquier categoría activa
+                categoria = Categoria.objects.get(pk=cat_id, activo=True)
             except (Categoria.DoesNotExist, ValueError, TypeError):
                 messages.error(request, "Debés seleccionar una categoría para aprobar.")
                 return redirect("economia:pendientes")
+
+            # (Opcional) si la transacción ya tenía categoría y el tipo cambia, lo informamos.
+            if tx.categoria and tx.categoria.tipo != categoria.tipo:
+                messages.info(
+                    request,
+                    f"Cambiado tipo de categoría: '{tx.categoria.tipo}' → '{categoria.tipo}'."
+                )
 
             tx.categoria = categoria
             tx.estado = "aprobado"
@@ -374,7 +383,11 @@ def transacciones_pendientes(request):
     return render(
         request,
         "economia/pendientes.html",
-        {"pendientes": pendientes, "categorias_gasto": categorias_gasto},
+        {
+            "pendientes": pendientes,
+            "categorias_gasto": categorias_gasto,
+            "categorias_ingreso": categorias_ingreso,  # 👈 pasamos también ingresos
+        },
     )
 
 

@@ -18,7 +18,7 @@
   <tbody>
   {% for t in pendientes %}
     <tr>
-      <td>{{ t.fecha }}</td>
+      <td>{{ t.fecha|date:"d/m/Y" }}</td>
       <td>{{ t.usuario.username|default:"-" }}</td>
       <td>{{ t.descripcion }}</td>
       <td>${{ t.monto }}</td>
@@ -27,26 +27,31 @@
           {% csrf_token %}
           <input type="hidden" name="tx_id" value="{{ t.id }}">
 
-          {# Selector de categoría para aprobar #}
+          {# Selector de categoría (muestra INGRESOS y GASTOS) #}
           <select name="categoria_id" title="Categoría al aprobar">
-            {% if t.categoria and t.categoria.tipo == "gasto" %}
-              {% for c in categorias_gasto %}
-                <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
-              {% endfor %}
-            {% elif t.categoria and t.categoria.tipo == "ingreso" %}
+            <option value="">— Elegí categoría —</option>
+
+            <optgroup label="Ingresos">
               {% for c in categorias_ingreso %}
-                <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+                <option value="{{ c.id }}"
+                        {% if t.categoria_id == c.id %}selected{% endif %}>
+                  {{ c.nombre }}
+                </option>
               {% endfor %}
-            {% else %}
-              {# Si no está definida la categoría todavía, por defecto mostramos gastos #}
+            </optgroup>
+
+            <optgroup label="Gastos">
               {% for c in categorias_gasto %}
-                <option value="{{ c.id }}">{{ c.nombre }}</option>
+                <option value="{{ c.id }}"
+                        {% if t.categoria_id == c.id %}selected{% endif %}>
+                  {{ c.nombre }}
+                </option>
               {% endfor %}
-            {% endif %}
+            </optgroup>
           </select>
       </td>
       <td style="white-space:nowrap">
-          <button type="submit" name="accion" value="aprobar">Aprobar</button>
+          <button type="submit" name="accion" value="aprobar" class="btn-aprobar">Aprobar</button>
 
           {# Comentario para rechazo #}
           <input type="text" name="comentario" placeholder="Motivo del rechazo" style="width:220px;">
@@ -68,6 +73,14 @@
     if (rechBtn && com) {
       rechBtn.addEventListener('click', function(){
         com.setAttribute('required', 'required');
+      });
+    }
+    // Hace obligatorio elegir categoría SOLO cuando se presiona "Aprobar"
+    const aprBtn = f.querySelector('.btn-aprobar');
+    const sel = f.querySelector('select[name="categoria_id"]');
+    if (aprBtn && sel) {
+      aprBtn.addEventListener('click', function(){
+        sel.setAttribute('required', 'required');
       });
     }
   });
