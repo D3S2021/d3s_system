@@ -9,120 +9,58 @@
   {% block extra_css %}{% endblock %}
   <style>
     /* ===== Notificaciones ===== */
-    .notif-badge{
-      position:absolute;top:-6px;right:-10px;
-      background:#d9534f;color:#fff;border-radius:10px;
-      padding:1px 6px;font-size:11px;line-height:1;
-    }
-    .notif-wrapper{ position:relative; }
-    .notif-btn{
-      appearance:none;border:0;background:transparent;cursor:pointer;
-      font-size:18px; line-height:1; position:relative; color:#fff;
-    }
-    .notif-dropdown{
-      display:none; position:absolute; top:24px; right:0;
-      width:320px; background:#fff; border:1px solid #ddd;
-      border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.2);
-      z-index: 2000;
-      color:#2c3e50;
-    }
-    .notif-dropdown.is-open{ display:block; }
-    .notif-dropdown header{
-      font-weight:600; padding:10px 12px;
-      border-bottom:1px solid #eee; background:#f8f9fa;
-      border-radius:8px 8px 0 0; color:#333;
-    }
-    .notif-dropdown ul{
-      list-style:none;margin:0;padding:0;max-height:320px;overflow-y:auto;
-    }
-    .notif-dropdown li{
-      padding:10px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;
-      color:#2c3e50;
-    }
-    .notif-dropdown li:last-child{ border-bottom:none; }
-    .notif-dropdown li a{ text-decoration:none;color:#2c3e50;display:block; }
-    .notif-dropdown li strong{ color:#000; }
-    .notif-dropdown li small{ display:block;color:#6b7a90;font-size:11px;margin-top:4px; }
-    .notif-dropdown .footer{
-      display:flex;justify-content:center;padding:10px 12px;border-top:1px solid #eee;
-      background:#fafafa;border-radius:0 0 8px 8px;
-    }
-    .notif-dropdown .footer a{
-      font-size:13px;font-weight:600;color:#2c7be5 !important;text-decoration:none !important;
-    }
-    .notif-dropdown .footer a:hover{ text-decoration:underline !important;color:#1b5cb8 !important; }
+    .notif-badge{position:absolute;top:-6px;right:-10px;background:#d9534f;color:#fff;border-radius:10px;padding:1px 6px;font-size:11px;line-height:1;}
+    .notif-wrapper{position:relative;}
+    .notif-btn{appearance:none;border:0;background:transparent;cursor:pointer;font-size:18px;line-height:1;position:relative;color:#fff;}
+    .notif-dropdown{display:none;position:absolute;top:24px;right:0;width:320px;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.2);z-index:2000;color:#2c3e50;}
+    .notif-dropdown.is-open{display:block;}
+    .notif-dropdown header{font-weight:600;padding:10px 12px;border-bottom:1px solid #eee;background:#f8f9fa;border-radius:8px 8px 0 0;color:#333;}
+    .notif-dropdown ul{list-style:none;margin:0;padding:0;max-height:320px;overflow-y:auto;}
+    .notif-dropdown li{padding:10px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;color:#2c3e50;}
+    .notif-dropdown li:last-child{border-bottom:none;}
+    .notif-dropdown li a{text-decoration:none;color:#2c3e50;display:block;}
+    .notif-dropdown li strong{color:#000;}
+    .notif-dropdown li small{display:block;color:#6b7a90;font-size:11px;margin-top:4px;}
+    .notif-dropdown .footer{display:flex;justify-content:center;padding:10px 12px;border-top:1px solid #eee;background:#fafafa;border-radius:0 0 8px 8px;}
+    .notif-dropdown .footer a{font-size:13px;font-weight:600;color:#2c7be5 !important;text-decoration:none !important;}
+    .notif-dropdown .footer a:hover{text-decoration:underline !important;color:#1b5cb8 !important;}
 
-    /* ===== Menú de usuario (ajustado) ===== */
-    .user-menu{ position:relative; display:inline-flex; align-items:center; gap:6px; }
-    .user-name-link{
-      color:#fff; font-weight:700; text-decoration:none;
-      padding:6px 8px; border-radius:6px; line-height:1;
+    /* ===== Menú de usuario ===== */
+    .user-menu{position:relative;display:flex;align-items:center;gap:8px;}
+    .user-name{
+      color:#fff;text-decoration:none;font-weight:700;letter-spacing:.02em;
+      padding:6px 2px;border-radius:4px;/* sin fondo -> que no parezca botón */
     }
-    .user-name-link:hover{ text-decoration:underline; }
-
-    .user-caret-btn{
-      background:transparent; border:0; color:#fff; cursor:pointer;
-      padding:6px 8px; line-height:1; border-radius:6px;
-      display:inline-flex; align-items:center; justify-content:center;
-      font-size:20px; /* flecha más grande */
+    .user-name:hover{text-decoration:underline;}
+    .user-caret{
+      background:transparent;border:0;color:#fff;cursor:pointer;line-height:1;
+      font-size:18px; /* flecha un poquito más grande */
+      padding:6px 6px;
     }
-    .user-caret-btn:focus-visible{ outline:2px solid rgba(56,97,251,.6); outline-offset:2px; }
-
     .user-dd{
-      position:absolute;
-      right:0;
-      top:calc(100% + 6px);
-      min-width:230px;
-      background:#fff;
-      border:1px solid #000000;
-      border-radius:10px;
-      box-shadow:0 10px 30px rgba(0,0,0,.12);
-      padding:6px 0;
-      display:none;
-      z-index:2000;
-      animation:fadeIn .15s ease;
-      overflow:hidden;
+      position:absolute;right:0;top:100%;min-width:230px;background:#fff;border:1px solid #000000;border-radius:10px;
+      box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px 0;display:none;z-index:2000;animation:fadeIn .15s ease;overflow:hidden;
     }
-    .user-menu.open .user-dd{ display:block; }
+    .user-menu.open .user-dd{display:block;}
 
-    .user-dd a, .user-dd button{
-      display:flex; align-items:center; gap:8px;
-      width:100%; text-align:left; padding:10px 14px;
-      color:#1e293b; text-decoration:none; border-radius:0;
-      background:transparent; border:0; cursor:pointer;
-      transition:background .15s, color .15s;
-      font-size:14px;
-    }
-    .user-dd a:hover, .user-dd button:hover{
-      background:#f1f5f9;
-      color:#0f172a;
-    }
-    .user-dd .divider{ border-top:1px solid #000000; margin:6px 0; }
+    .user-dd a,.user-dd button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 14px;color:#1e293b;text-decoration:none;border-radius:0;background:transparent;border:0;cursor:pointer;transition:background .15s,color .15s;font-size:14px;}
+    .user-dd a:hover,.user-dd button:hover{background:#f1f5f9;color:#0f172a;}
+    .user-dd .divider{border-top:1px solid #000000;margin:6px 0;}
 
-    @keyframes fadeIn{
-      from{opacity:0; transform:translateY(-4px);}
-      to{opacity:1; transform:translateY(0);}
-    }
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
 
-    /* Forzar color oscuro dentro del dropdown del usuario (el admin lo pone blanco) */
-    #user-tools .user-dd a,
-    #user-tools .user-dd a:link,
-    #user-tools .user-dd a:visited{ color:#1e293b !important; }
-    #user-tools .user-dd a:hover{ color:#0f172a !important; }
+    /* Forzar color oscuro dentro del dropdown del usuario (admin css lo blanquea) */
+    #user-tools .user-dd a,#user-tools .user-dd a:link,#user-tools .user-dd a:visited{color:#1e293b !important;}
+    #user-tools .user-dd a:hover{color:#0f172a !important;}
 
-    /* ===== Modal ===== */
-    .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.45);
-      display:none; align-items:center; justify-content:center; z-index:2200; }
-    .modal-overlay.open{ display:flex; }
-    .modal{
-      width:min(520px, 92vw); max-height:88vh; overflow:auto; background:#fff;
-      border-radius:12px; box-shadow:0 10px 35px rgba(0,0,0,.25);
-    }
-    .modal-header{ display:flex; align-items:center; justify-content:space-between;
-      padding:12px 16px; border-bottom:1px solid #eee; }
-    .modal-body{ padding:14px 16px; }
-    .modal-title{ margin:0; font-size:18px; font-weight:700; }
-    .btn-close{ border:none; background:transparent; font-size:22px; line-height:1; cursor:pointer; color:#666; }
+    /* ===== Modal genérico ===== */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:2200;}
+    .modal-overlay.open{display:flex;}
+    .modal{width:min(520px,92vw);max-height:88vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;}
+    .modal-body{padding:14px 16px;}
+    .modal-title{margin:0;font-size:18px;font-weight:700;}
+    .btn-close{border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#666;}
 
     /* ===== Mensajes ===== */
     .messagelist{margin:10px 0 12px;padding:0;list-style:none}
@@ -172,19 +110,14 @@
             </div>
           </div>
 
-          <!-- 👤 Menú Usuario -->
+          <!-- 👤 Nombre (link al perfil) + flecha para menú -->
           <div class="user-menu" id="userMenu">
-            <!-- Nombre: link directo al perfil -->
-            <a class="user-name-link" href="{% url 'perfil' %}">
+            <a href="{% url 'perfil' %}" class="user-name" id="userNameText">
               {{ request.user.get_full_name|default:request.user.username }}
             </a>
+            <button class="user-caret" id="userCaret" type="button" aria-label="Abrir menú" title="Abrir menú">▾</button>
 
-            <!-- Flecha: solo abre/cierra el dropdown -->
-            <button class="user-caret-btn" type="button" id="userCaret" aria-haspopup="menu" aria-expanded="false" title="Abrir menú">
-              ▾
-            </button>
-
-            <div class="user-dd" role="menu" aria-label="Menú de usuario">
+            <div class="user-dd" id="userDropdown">
               <button type="button" id="openEditName">✏️ Cambiar nombre</button>
               <button type="button" id="openChangePwd">🔑 Cambiar contraseña</button>
               <div class="divider"></div>
@@ -243,93 +176,155 @@
   </div>
 
   <script>
-    // ===== Notificaciones =====
+    /* ===== Helpers ===== */
+    function getCookie(name){
+      const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+      return m ? m.pop() : '';
+    }
+    function closeOnOutside(overlay){
+      overlay.addEventListener('click', (e)=>{ if(e.target===overlay){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }});
+    }
+    function attachCloseButtons(){
+      document.querySelectorAll('.btn-close').forEach(b=>{
+        b.addEventListener('click', ()=>{
+          const sel = b.getAttribute('data-close');
+          const ov = sel ? document.querySelector(sel) : b.closest('.modal-overlay');
+          if(ov){ ov.classList.remove('open'); ov.setAttribute('aria-hidden','true'); }
+        });
+      });
+    }
+    function openModal(overlay){ overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false'); }
+
+    /* ===== Notificaciones ===== */
     (function(){
       const btn  = document.getElementById('notifBell');
       const menu = document.getElementById('notifMenu');
       if (!btn || !menu) return;
 
-      function closeMenu(){
-        menu.classList.remove('is-open');
-        btn.setAttribute('aria-expanded','false');
-      }
-      function toggleMenu(e){
-        e.stopPropagation();
-        const open = menu.classList.toggle('is-open');
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-      }
-
-      // Evitar que clicks dentro del dropdown lo cierren al instante
-      menu.addEventListener('click', function(e){ e.stopPropagation(); });
-
+      function closeMenu(){ menu.classList.remove('is-open'); btn.setAttribute('aria-expanded','false'); }
+      function toggleMenu(e){ e.stopPropagation(); const open = menu.classList.toggle('is-open'); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+      menu.addEventListener('click', e=>e.stopPropagation());
       btn.addEventListener('click', toggleMenu);
-      document.addEventListener('click', (e)=>{
-        if(!menu.contains(e.target) && e.target !== btn) closeMenu();
-      });
+      document.addEventListener('click', (e)=>{ if(!menu.contains(e.target) && e.target !== btn) closeMenu(); });
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
     })();
 
-    // ===== Menú de Usuario (flecha abre, nombre navega) =====
+    /* ===== Menú Usuario (solo con la flecha) ===== */
     (function(){
-      const menu     = document.getElementById('userMenu');
+      const menu = document.getElementById('userMenu');
       if(!menu) return;
-
-      const caretBtn = document.getElementById('userCaret');
-      const dropdown = menu.querySelector('.user-dd');
-
-      function close(){ menu.classList.remove('open'); caretBtn?.setAttribute('aria-expanded','false'); }
-      function toggle(e){
-        e.stopPropagation();
-        const open = menu.classList.toggle('open');
-        caretBtn?.setAttribute('aria-expanded', open ? 'true' : 'false');
-      }
-
-      caretBtn?.addEventListener('click', toggle);
-      dropdown?.addEventListener('click', (e)=> e.stopPropagation());
-      document.addEventListener('click', (e)=>{ if(!menu.contains(e.target)) close(); });
-      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
+      const caret = document.getElementById('userCaret');
+      const dropdown = document.getElementById('userDropdown');
+      caret.addEventListener('click', (e)=>{ e.stopPropagation(); menu.classList.toggle('open'); });
+      dropdown.addEventListener('click', (e)=>e.stopPropagation());
+      document.addEventListener('click', ()=>menu.classList.remove('open'));
     })();
 
-    // ===== Modales AJAX =====
+    /* ===== Cargar contenido de modales por AJAX y manejar submit por fetch ===== */
     (function(){
-      const editBtn=document.getElementById('openEditName');
-      const pwdBtn =document.getElementById('openChangePwd');
-      const editOv=document.getElementById('modalEditName');
-      const pwdOv =document.getElementById('modalChangePwd');
-      const editCt=document.getElementById('editNameContainer');
-      const pwdCt =document.getElementById('changePwdContainer');
+      const editBtn = document.getElementById('openEditName');
+      const pwdBtn  = document.getElementById('openChangePwd');
+      const editOv  = document.getElementById('modalEditName');
+      const pwdOv   = document.getElementById('modalChangePwd');
+      const editCt  = document.getElementById('editNameContainer');
+      const pwdCt   = document.getElementById('changePwdContainer');
+      const userNameText = document.getElementById('userNameText');
 
-      function openModal(ov){ ov.classList.add('open'); ov.setAttribute('aria-hidden','false'); }
-      function closeModal(ov){ ov.classList.remove('open'); ov.setAttribute('aria-hidden','true'); }
+      function wireAjaxForm(container, overlay, afterOk){
+        const form = container.querySelector('form');
+        if(!form) return;
+        form.addEventListener('submit', async function(e){
+          e.preventDefault();                           // ← NO navegar
+          const fd = new FormData(form);
+          const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+          try{
+            const r = await fetch(form.action, {
+              method: 'POST',
+              headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrf },
+              body: fd,
+              credentials: 'same-origin'
+            });
+            // Puede devolver JSON (ok/html) o el partial con errores
+            const text = await r.text();
+            let data = null;
+            try { data = JSON.parse(text); } catch (_){}
 
-      // cerrar con la X y clic fuera
-      document.querySelectorAll('.btn-close').forEach(b=>{
-        b.addEventListener('click',()=>closeModal(document.querySelector(b.dataset.close)));
-      });
-      [editOv,pwdOv].forEach(ov=>{
-        ov.addEventListener('click',(e)=>{ if(e.target===ov) closeModal(ov); });
-      });
+            if (data && data.ok){
+              // Cerrar modal
+              overlay.classList.remove('open');
+              overlay.setAttribute('aria-hidden','true');
+              if (afterOk) afterOk(data);
+              return;
+            }
 
-      if(editBtn){
-        editBtn.addEventListener('click',()=>{
+            // Si devolvió el formulario con errores, lo reinyectamos y re-conectamos el handler
+            if (!data && text.trim().startsWith('<')){
+              container.innerHTML = text;
+              wireAjaxForm(container, overlay, afterOk);
+              return;
+            }
+
+            // Si devolvió JSON con errores y html
+            if (data && data.html){
+              container.innerHTML = data.html;
+              wireAjaxForm(container, overlay, afterOk);
+              return;
+            }
+
+            alert('No se pudo guardar. Intentá de nuevo.');
+          }catch(err){
+            console.error(err);
+            alert('Error de red.');
+          }
+        });
+      }
+
+      // Abrir modal "Cambiar nombre"
+      if (editBtn){
+        editBtn.addEventListener('click', ()=>{
           openModal(editOv);
-          editCt.innerHTML='<p style="margin:0;color:#666">Cargando…</p>';
-          fetch("{% url 'perfil_editar_modal' %}",{headers:{'X-Requested-With':'XMLHttpRequest'}})
+          editCt.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
+          fetch("{% url 'perfil_editar_modal' %}", { headers:{'X-Requested-With':'XMLHttpRequest'} })
             .then(r=>r.text())
-            .then(html=>{editCt.innerHTML=html;})
-            .catch(()=>editCt.innerHTML='<p style="color:#a00">Error al cargar.</p>');
+            .then(html=>{
+              editCt.innerHTML = html;
+              wireAjaxForm(editCt, editOv, (data)=>{
+                // Actualizar el nombre mostrado si el backend lo envía
+                if (data.name && userNameText) userNameText.textContent = data.name;
+              });
+            })
+            .catch(()=> editCt.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
         });
       }
-      if(pwdBtn){
-        pwdBtn.addEventListener('click',()=>{
+
+      // Abrir modal "Cambiar contraseña"
+      if (pwdBtn){
+        pwdBtn.addEventListener('click', ()=>{
           openModal(pwdOv);
-          pwdCt.innerHTML='<p style="margin:0;color:#666">Cargando…</p>';
-          fetch("{% url 'password_change_modal' %}",{headers:{'X-Requested-With':'XMLHttpRequest'}})
+          pwdCt.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
+          fetch("{% url 'password_change_modal' %}", { headers:{'X-Requested-With':'XMLHttpRequest'} })
             .then(r=>r.text())
-            .then(html=>{pwdCt.innerHTML=html;})
-            .catch(()=>pwdCt.innerHTML='<p style="color:#a00">Error al cargar.</p>');
+            .then(html=>{
+              pwdCt.innerHTML = html;
+              wireAjaxForm(pwdCt, pwdOv, ()=>{
+                // Opcional: mostrar un toast/simple alert
+                alert('Contraseña actualizada.');
+              });
+            })
+            .catch(()=> pwdCt.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
         });
       }
+
+      attachCloseButtons();
+      closeOnOutside(editOv);
+      closeOnOutside(pwdOv);
+      document.addEventListener('keydown', (e)=>{
+        if (e.key === 'Escape'){
+          [editOv, pwdOv].forEach(ov=>{
+            if(ov.classList.contains('open')){ ov.classList.remove('open'); ov.setAttribute('aria-hidden','true'); }
+          });
+        }
+      });
     })();
   </script>
 </body>

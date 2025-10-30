@@ -22,7 +22,7 @@
   .btn-primary:hover{background:#1d4ed8;color:#fff !important}
 
   .meta-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
-  .chip{background:#f3f4f6;padding:6px 10px;border-radius:999px;font-weight:600;color:#111827}
+  .chip{background:#f3f4f6;padding:6px 10px;border-radius:999px;font-weight:600;color:#111827;display:inline-flex;align-items:center;gap:8px}
 
   .tasks-top{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
   .board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px}
@@ -46,38 +46,27 @@
   }
   .link-icon:hover{background:#eef2ff}
 
-  /* ===== MODAL (overlay + tamaño “justo”) ===== */
+  /* ===== MODAL ===== */
   .modal-overlay{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,.45);
-    display:none;                 /* 🔧 default oculto */
-    z-index:1200;
-    overflow:auto;                /* el overlay scrollea si hace falta */
-    padding:24px;
+    position:fixed; inset:0; background:rgba(0,0,0,.45);
+    display:none; z-index:1200; overflow:auto; padding:24px;
     align-items:center;justify-content:center;
   }
-  .modal-overlay.open{display:flex} /* 🔧 se muestra al abrir */
-
+  .modal-overlay.open{display:flex}
   .modal{
     background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);
-    width:clamp(560px, 64vw, 720px);   /* más angosto y cómodo */
-    max-width:720px;
-    max-height:none;                   /* sin tope de alto: scrollea overlay */
-    display:flex;flex-direction:column;
-    animation:fadeIn .25s ease;
-    overflow:hidden;
+    width:clamp(560px, 64vw, 720px); max-width:720px; max-height:none;
+    display:flex;flex-direction:column; animation:fadeIn .25s ease; overflow:hidden;
   }
   @keyframes fadeIn{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:none;}}
   @media (max-width:600px){ .modal{ width:94vw; } }
-
   .modal *{box-sizing:border-box;}
   .modal-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee}
   .modal-title{margin:0;font-weight:700;color:#1e293b;font-size:18px}
-  .modal-body{padding:16px 18px;}     /* sin overflow interno */
+  .modal-body{padding:16px 18px;}
   .btn-close{border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#666}
 
-  /* ===== FORM ESTILO dentro del modal ===== */
+  /* ===== FORM estilo dentro del modal ===== */
   #modalContainer #formTarea label{display:block;font-weight:600;margin:6px 0 4px;color:#0f172a}
   #modalContainer #formTarea input,
   #modalContainer #formTarea select,
@@ -96,8 +85,7 @@
   <a class="btn" href="{% url 'proyectos:dashboard' %}"
      onclick="if (history.length > 1){history.back();return false;}">← Volver</a>
 
-  <!-- IMPORTANTE: apuntamos a la vista modal -->
-  <a class="btn btn-primary" id="btnEditarProyecto" href="{% url 'proyectos:editar_modal' proyecto.id %}">
+  <a class="btn btn-primary" id="btnEditarProyecto" data-url="{% url 'proyectos:editar_modal' proyecto.id %}">
     Editar proyecto
   </a>
 </div>
@@ -107,6 +95,17 @@
 <div class="meta-chips">
   <span class="chip">Prioridad: {{ proyecto.get_prioridad_display }}</span>
   <span class="chip">Responsable: {{ proyecto.responsable|default:"—" }}</span>
+
+  <span class="chip">
+    Estado:
+    <select id="selectEstadoProyecto"
+            data-url="{% url 'proyectos:proyecto_cambiar_estado' proyecto.id %}"
+            style="border:1px solid #cbd5e1;border-radius:999px;background:#fff;padding:4px 8px;font-weight:600;">
+      {% for val, label in proyecto.ESTADOS %}
+        <option value="{{ val }}" {% if proyecto.estado == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </span>
 </div>
 
 {% if proyecto.descripcion %}
@@ -117,7 +116,8 @@
 
 <div class="tasks-top">
   <h2 style="margin:0">Tareas</h2>
-  <button class="btn btn-primary" id="btnNuevaTarea" data-url="{% url 'proyectos:tarea_crear' proyecto.id %}">+ Nueva tarea</button>
+  <button class="btn btn-primary" type="button" id="btnNuevaTarea"
+          data-url="{% url 'proyectos:tarea_crear' proyecto.id %}">+ Nueva tarea</button>
 </div>
 
 <div class="board">
@@ -127,14 +127,25 @@
       {% for t in cols|get_item:key %}
         <div class="card" draggable="true" data-tarea="{{ t.id }}" ondragstart="dragTask(event)">
           <div class="card-actions">
-            <button type="button" class="link-icon js-edit-task" title="Editar"
+            <button type="button"
+                    class="link-icon js-edit-task"
+                    title="Editar"
                     data-url="{% url 'proyectos:tarea_editar' t.id %}">Editar</button>
+
+            <button type="button"
+                    class="link-icon js-delete-task"
+                    title="Eliminar"
+                    data-url="{% url 'proyectos:tarea_eliminar' t.id %}">Eliminar</button>
           </div>
           <div style="font-weight:600; padding-right:56px">{{ t.titulo }}</div>
           <div class="meta">
             {% if t.vence_el %}{{ t.vence_el|date:"d/m/Y" }}{% else %}—{% endif %} ·
             {{ t.get_prioridad_display }} ·
-            {% if t.asignado_a %}{{ t.asignado_a }}{% else %}—{% endif %}
+            {% with users=t.asignados.all %}
+              {% if users %}
+                {% for u in users %}{{ u }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              {% else %}—{% endif %}
+            {% endwith %}
           </div>
         </div>
       {% empty %}
@@ -160,155 +171,320 @@
 
 {% block extra_js %}
 <script>
-function addModalFlag(url){ return url.includes('?') ? url + '&modal=1' : url + '?modal=1'; }
-function getCookie(name){ const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():''; }
-
-let draggedId = null;
-function dragTask(ev){ draggedId = ev.currentTarget.dataset.tarea; ev.dataTransfer.effectAllowed = 'move'; }
-function allowDrop(ev){ ev.preventDefault(); }
-function dropOnColumn(ev){
-  ev.preventDefault();
-  const col = ev.currentTarget.closest('[data-estado]');
-  if(!col || !draggedId) return;
-  const nuevo = col.dataset.estado;
-  const card = document.querySelector('[data-tarea="'+draggedId+'"]');
-  if(card) col.appendChild(card);
-  const url = "{% url 'proyectos:tarea_cambiar_estado' 0 %}".replace('0', draggedId);
-  const fd  = new FormData();
-  fd.append('estado', nuevo);
-  fd.append('csrfmiddlewaretoken', getCookie('csrftoken') || '');
-  fetch(url, { method:'POST', body:fd }).finally(()=>{ draggedId = null; });
-}
-
-let _currentModalUrl = null;
-
-function openModal(titulo, url){
-  const ov=document.getElementById('modalGeneral');
-  const title=document.getElementById('modalTitle');
-  const cont=document.getElementById('modalContainer');
-  _currentModalUrl=url;
-  ov.classList.add('open');
-  ov.setAttribute('aria-hidden','false');
-  title.textContent=titulo;
-  cont.innerHTML='<p style="color:#555">Cargando formulario…</p>';
-  document.documentElement.style.overflow='hidden';
-  document.body.style.overflow='hidden';
-  fetch(addModalFlag(url),{headers:{'X-Requested-With':'XMLHttpRequest'}})
-    .then(r=>r.text())
-    .then(html=>{
-      cont.innerHTML=html;
-      hookTareaForm();      // si es el form de tarea
-      hookProyectoForm();   // si es el form de proyecto
-    })
-    .catch(()=>cont.innerHTML='<p style="color:#a00">Error al cargar.</p>');
-}
-
-function closeModal(){
-  const ov=document.getElementById('modalGeneral');
-  ov.classList.remove('open');
-  ov.setAttribute('aria-hidden','true');
-  document.documentElement.style.overflow='';
-  document.body.style.overflow='';
-}
-
-document.getElementById('closeModal').addEventListener('click',closeModal);
-document.getElementById('modalGeneral').addEventListener('click',e=>{if(e.target.id==='modalGeneral')closeModal();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
-
-/* Nueva tarea */
-document.getElementById('btnNuevaTarea').addEventListener('click',e=>{
-  e.preventDefault();openModal('Nueva tarea',e.currentTarget.dataset.url);
-});
-
-/* Editar tarea desde la tarjeta */
-document.querySelector('.board').addEventListener('click',e=>{
-  const btn=e.target.closest('.js-edit-task');if(!btn)return;
-  e.preventDefault();openModal('Editar tarea',btn.dataset.url);
-});
-
-/* Editar proyecto (abre modal y envía por AJAX) */
-const btnEditProj = document.getElementById('btnEditarProyecto');
-if (btnEditProj){
-  btnEditProj.addEventListener('click', (e)=>{
-    e.preventDefault();
-    openModal('Editar proyecto', btnEditProj.href);
-  });
-}
-
-/* ===== Hooks de formularios incrustados ===== */
-function hookTareaForm(){
-  const form=document.getElementById('formTarea');
-  if(!form)return;
-  if(!form.getAttribute('action'))form.setAttribute('action',_currentModalUrl);
-  const selAsignado=document.getElementById('id_asignado_a');
-  if(selAsignado){
-    Array.from(selAsignado.options).forEach(opt=>{
-      if((opt.textContent||'').trim().toLowerCase()==='admin')opt.remove();
-    });
-  }
-  const btnCancelar=document.getElementById('btnCancelarTarea');
-  if(btnCancelar)btnCancelar.addEventListener('click',closeModal);
-  form.addEventListener('submit',function(e){
-    e.preventDefault();
-    const fd=new FormData(form);
-    fetch(form.action,{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'},body:fd})
-    .then(r=>r.json())
-    .then(data=>{
-      if(data.ok){closeModal();location.reload();}
-      else if(data.html){document.getElementById('modalContainer').innerHTML=data.html;hookTareaForm();}
-      else{alert('No se pudo guardar la tarea.');}
-    })
-    .catch(()=>alert('Error de red al guardar.'));
-  });
-}
-
-function hookProyectoForm(){
-  const form = document.getElementById('formProyecto');
-  if(!form) return;
-
-  // Asegura action correcta por si el partial no la setea
-  if(!form.getAttribute('action')){
-    form.setAttribute('action', document.getElementById('btnEditarProyecto').href);
+(function(){
+  /* ===== Helpers ===== */
+  function addModalFlag(url){ return url.includes('?') ? url + '&modal=1' : url + '?modal=1'; }
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
   }
 
-  const btnCancelar = document.getElementById('btnCancelarProyecto');
-  if (btnCancelar) btnCancelar.addEventListener('click', closeModal);
-
-  form.addEventListener('submit', function(ev){
+  /* ===== Drag & Drop ===== */
+  window.dragTask = function(ev){ window._draggedId = ev.currentTarget.dataset.tarea; ev.dataTransfer.effectAllowed='move'; };
+  window.allowDrop = function(ev){ ev.preventDefault(); };
+  window.dropOnColumn = function(ev){
     ev.preventDefault();
-    const fd = new FormData(form);
-    fetch(form.action, {
-      method: 'POST',
-      headers: {'X-Requested-With':'XMLHttpRequest'},
-      body: fd
-    })
-    .then(r => r.json().then(data => ({ok:r.ok, data})))
-    .then(({ok, data})=>{
-      if (data.ok){
-        closeModal();
-        location.reload();
-      } else if (data.html){
-        document.getElementById('modalContainer').innerHTML = data.html;
-        hookProyectoForm();
-      } else {
-        alert('No se pudo guardar el proyecto.');
-      }
-    })
-    .catch(()=> alert('Error de red al guardar.'));
-  });
-}
+    const col = ev.currentTarget.closest('[data-estado]');
+    if(!col || !window._draggedId) return;
+    const nuevo = col.dataset.estado;
+    const card = document.querySelector('[data-tarea="'+window._draggedId+'"]');
+    if(card) col.appendChild(card);
+    const url = "{% url 'proyectos:tarea_cambiar_estado' 0 %}".replace('0', window._draggedId);
+    const fd  = new FormData();
+    fd.append('estado', nuevo);
+    fd.append('csrfmiddlewaretoken', getCookie('csrftoken') || '');
+    fetch(url, { method:'POST', body:fd, credentials:'same-origin', headers:{'X-Requested-With':'XMLHttpRequest'} })
+      .finally(()=>{ window._draggedId = null; });
+  };
 
-/* ===== Abrir modal de TAREA automáticamente si viene desde notificación ===== */
-document.addEventListener('DOMContentLoaded', () => {
-  const params = new URLSearchParams(location.search);
-  const openTask = params.get('open_task');
-  if (openTask){
-    // Carga el DETALLE de la tarea en modal
-    const url = "{% url 'proyectos:tarea_detalle_modal' 0 %}".replace('0', openTask);
-    openModal('Detalle de tarea', url);
-    // limpia el query param para que no se reabra en refresh
-    history.replaceState({}, '', location.pathname);
+  /* ===== Modal ===== */
+  let CURRENT_URL = null;
+  const overlay  = document.getElementById('modalGeneral');
+  const titleEl  = document.getElementById('modalTitle');
+  const contEl   = document.getElementById('modalContainer');
+
+  function openModal(titulo, url){
+    CURRENT_URL = url;
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden','false');
+    titleEl.textContent = titulo;
+    contEl.innerHTML = '<p style="color:#555">Cargando…</p>';
+    document.documentElement.style.overflow='hidden';
+    document.body.style.overflow='hidden';
+
+    fetch(addModalFlag(url), { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
+      .then(r => r.text())
+      .then(html => {
+        contEl.innerHTML = html;
+        hookTareaForm();
+        hookProyectoForm();
+      })
+      .catch(() => contEl.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
   }
-});
+  function closeModal(){
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden','true');
+    document.documentElement.style.overflow='';
+    document.body.style.overflow='';
+  }
+  (function bindModalChrome(){
+    const closeBtn = document.getElementById('closeModal');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+  })();
+
+  /* ===== Delegated clicks ===== */
+  document.addEventListener('click', async (e)=>{
+    // Nueva tarea
+    const btnNew = e.target.closest('#btnNuevaTarea');
+    if (btnNew){
+      e.preventDefault();
+      const url = btnNew.getAttribute('data-url');
+      if (url) openModal('Nueva tarea', url);
+      return;
+    }
+
+    // Editar tarea
+    const btnEditTask = e.target.closest('.js-edit-task');
+    if (btnEditTask){
+      e.preventDefault();
+      const url = btnEditTask.getAttribute('data-url');
+      if (url) openModal('Editar tarea', url);
+      return;
+    }
+
+    // Eliminar tarea
+    const btnDel = e.target.closest('.js-delete-task');
+    if (btnDel){
+      e.preventDefault();
+      if(!confirm('¿Eliminar esta tarea de forma definitiva?')) return;
+
+      const url = btnDel.getAttribute('data-url');
+      if(!url) return;
+
+      const fd = new FormData();
+      fd.append('csrfmiddlewaretoken', getCookie('csrftoken') || '');
+
+      try{
+        const resp = await fetch(url, {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With':'XMLHttpRequest' }
+        });
+        if (!resp.ok){
+          try { const data = await resp.json(); if (!data.ok) throw 0; } catch(_){ throw 0; }
+        }
+        const card = btnDel.closest('.card');
+        if (card) card.remove();
+      }catch(err){
+        alert('No se pudo eliminar la tarea.');
+      }
+      return;
+    }
+
+    // Editar proyecto
+    const btnEditProj = e.target.closest('#btnEditarProyecto');
+    if (btnEditProj){
+      e.preventDefault();
+      const url = btnEditProj.getAttribute('data-url');
+      if (url) openModal('Editar proyecto', url);
+      return;
+    }
+  });
+
+  /* ===== AJAX form helper ===== */
+  async function submitAjaxForm(form, onSuccess){
+    const fd = new FormData(form);
+    const headers = {'X-Requested-With':'XMLHttpRequest'};
+    const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
+    if (csrf) headers['X-CSRFToken'] = csrf;
+
+    const resp = await fetch(form.action || CURRENT_URL, { method:'POST', headers, body:fd, credentials:'same-origin' });
+    const ct = resp.headers.get('content-type') || '';
+    const txt = await resp.text();
+
+    try{
+      const data = JSON.parse(txt);
+      if (data.ok){ onSuccess(data); return; }
+      if (data.html){ contEl.innerHTML = data.html; return 'replace'; }
+    }catch(_){}
+
+    if (ct.includes('text/html')){
+      if (txt.includes('<form') && txt.includes('</form>')){ contEl.innerHTML = txt; return 'replace'; }
+      onSuccess({}); return;
+    }
+
+    if (resp.ok){ onSuccess({}); return; }
+    throw new Error('Respuesta inválida del servidor');
+  }
+
+  /* ===== Hooks de formularios dentro del modal ===== */
+  // >>>>>>>>>> CORREGIDO: versión con delegación para la "X" de los chips <<<<<<<<<<
+  window.hookTareaForm = function(){
+    const form = contEl.querySelector('#formTarea');
+    if (!form) return;
+
+    if (!form.getAttribute('action')) form.setAttribute('action', CURRENT_URL);
+
+    const sel       = contEl.querySelector('#id_asignados');      // <select multiple> oculto
+    const chipsWrap = contEl.querySelector('#chipsAsignados');    // contenedor de chips visibles
+    const btnAdd    = contEl.querySelector('#btnAddAsignado');    // botón "+"
+
+    // limpiar "admin"
+    if (sel){
+      Array.from(sel.options).forEach(opt=>{
+        if((opt.textContent||'').trim().toLowerCase()==='admin') opt.remove();
+      });
+    }
+
+    function renderChips(){
+      if (!sel || !chipsWrap) return;
+      const selected = Array.from(sel.options).filter(o=>o.selected);
+      if (!selected.length){
+        chipsWrap.innerHTML = '<span class="chip chip-empty">Sin asignados</span>';
+        return;
+      }
+      chipsWrap.innerHTML = selected.map(o =>
+        `<span class="chip" data-val="${o.value}">
+           <span>${o.text}</span>
+           <button type="button" class="rm" title="Quitar" aria-label="Quitar">×</button>
+         </span>`
+      ).join('');
+    }
+
+    // render inicial + re-render por cambios del select oculto
+    renderChips();
+    sel?.addEventListener('change', renderChips);
+
+    // ✅ Delegación: quitar asignado al clickear la X
+    chipsWrap?.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.rm');
+      if (!btn) return;
+      const chip = btn.closest('.chip');
+      if (!chip) return;
+      const val = chip.dataset.val;
+      Array.from(sel.options).forEach(o => { if (o.value === val) o.selected = false; });
+      renderChips();
+    });
+
+    // Mini menú con los no-seleccionados
+    function openMiniMenu(anchor){
+      const notSelected = Array.from(sel.options).filter(o=>!o.selected);
+      if (!notSelected.length) return;
+
+      const menu = document.createElement('div');
+      menu.className = 'mini-menu';
+      menu.innerHTML = notSelected.map(o=>`<button type="button" class="mini-item" data-val="${o.value}">${o.text}</button>`).join('');
+      document.body.appendChild(menu);
+
+      const r = anchor.getBoundingClientRect();
+      Object.assign(menu.style, {
+        position:'fixed', top:(r.bottom+6)+'px', left:r.left+'px', zIndex:99999,
+        minWidth:'180px', background:'#fff', border:'1px solid #e5e7eb',
+        borderRadius:'10px', boxShadow:'0 8px 24px rgba(0,0,0,.12)', padding:'6px'
+      });
+
+      function close(){
+        menu.remove();
+        document.removeEventListener('click', onDoc, true);
+        window.removeEventListener('resize', close);
+        window.removeEventListener('scroll', close, true);
+      }
+      function onDoc(e){ if (!menu.contains(e.target) && e.target!==anchor) close(); }
+
+      menu.querySelectorAll('.mini-item').forEach(it=>{
+        Object.assign(it.style, {
+          display:'block', width:'100%', textAlign:'left', padding:'8px 10px',
+          borderRadius:'8px', border:'0', background:'transparent', cursor:'pointer'
+        });
+        it.addEventListener('mouseenter', ()=> it.style.background='#f8fafc');
+        it.addEventListener('mouseleave', ()=> it.style.background='transparent');
+        it.addEventListener('click', ()=>{
+          const val = it.getAttribute('data-val');
+          Array.from(sel.options).forEach(o=>{ if (o.value===val) o.selected=true; });
+          renderChips();
+          close();
+        });
+      });
+
+      document.addEventListener('click', onDoc, true);
+      window.addEventListener('resize', close);
+      window.addEventListener('scroll', close, true);
+    }
+
+    btnAdd?.addEventListener('click', ()=>{ if (sel) openMiniMenu(btnAdd); });
+
+    // Cancelar modal
+    const btnCancel = contEl.querySelector('#btnCancelarTarea');
+    if (btnCancel) btnCancel.addEventListener('click', ()=> {
+      document.getElementById('modalGeneral')?.classList.remove('open');
+      document.documentElement.style.overflow=''; document.body.style.overflow='';
+    });
+
+    // Submit AJAX
+    form.addEventListener('submit', async function(e){
+      e.preventDefault();
+      try{
+        const result = await submitAjaxForm(form, ()=>{ location.reload(); });
+        if (result === 'replace'){ hookTareaForm(); }
+      }catch(_){ alert('No se pudo guardar la tarea.'); }
+    });
+  };
+
+  window.hookProyectoForm = function(){
+    const form = contEl.querySelector('#formProyecto');
+    if (!form) return;
+
+    if (!form.getAttribute('action')) form.setAttribute('action', CURRENT_URL);
+
+    const btnCancel = contEl.querySelector('#btnCancelarProyecto');
+    if (btnCancel) btnCancel.addEventListener('click', ()=> {
+      document.getElementById('modalGeneral')?.classList.remove('open');
+      document.documentElement.style.overflow=''; document.body.style.overflow='';
+    });
+
+    form.addEventListener('submit', async function(ev){
+      ev.preventDefault();
+      try{
+        const result = await submitAjaxForm(form, (data)=>{
+          if (data?.redirect) window.location.href = data.redirect;
+          else location.reload();
+        });
+        if (result === 'replace'){ hookProyectoForm(); }
+      }catch(_){ alert('No se pudo guardar el proyecto.'); }
+    });
+  };
+
+  /* ===== Abrir modal directo si viene ?open_task=ID ===== */
+  document.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(location.search);
+    const openTask = params.get('open_task');
+    if (openTask){
+      const url = "{% url 'proyectos:tarea_detalle_modal' 0 %}".replace('0', openTask);
+      openModal('Detalle de tarea', url);
+      history.replaceState({}, '', location.pathname);
+    }
+  });
+
+  /* ===== Cambio de estado del proyecto (AJAX) ===== */
+  (function(){
+    const sel = document.getElementById('selectEstadoProyecto'); if (!sel) return;
+    const url = sel.getAttribute('data-url');
+    function flashOK(){ sel.style.boxShadow = '0 0 0 3px rgba(34,197,94,.35)'; setTimeout(()=> sel.style.boxShadow = '', 900); }
+    function flashError(){ sel.style.boxShadow = '0 0 0 3px rgba(239,68,68,.35)'; setTimeout(()=> sel.style.boxShadow = '', 1200); }
+
+    sel.addEventListener('change', async function(){
+      try{
+        const fd = new FormData();
+        fd.append('estado', sel.value);
+        fd.append('csrfmiddlewaretoken', getCookie('csrftoken') || '');
+        const resp = await fetch(url, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-Requested-With':'XMLHttpRequest' }});
+        const data = await resp.json(); if (!resp.ok || !data.ok) throw 0; flashOK();
+      }catch(_){ flashError(); alert('No se pudo cambiar el estado del proyecto.'); }
+    });
+  })();
+
+})();
 </script>
 {% endblock %}

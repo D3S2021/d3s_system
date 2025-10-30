@@ -4,7 +4,6 @@
       action="{{ action_url|default:'' }}"
       class="tarea-form">
   {% csrf_token %}
-  <!-- fuerza tratar como AJAX aunque el fetch no ponga el header -->
   <input type="hidden" name="ajax" value="1">
 
   <div class="grid">
@@ -35,10 +34,22 @@
 
     <div class="row-2">
       <div class="field">
-        <label for="{{ form.asignado_a.id_for_label }}">Asignado a</label>
-        {{ form.asignado_a }}
-        {% for e in form.asignado_a.errors %}<div class="err">{{ e }}</div>{% endfor %}
+        <div class="label-row">
+          <span>Asignado a</span>
+          <button type="button" id="btnAddAsignado" class="btn-icon" title="Añadir">+</button>
+        </div>
+
+        {# Chips visibles (renderizados por JS) #}
+        <div id="chipsAsignados" class="chips-wrap" aria-live="polite"></div>
+
+        {# Campo real (oculto) para enviar al backend #}
+        <div class="visually-hidden">
+          {{ form.asignados }}
+        </div>
+
+        {% for e in form.asignados.errors %}<div class="err">{{ e }}</div>{% endfor %}
       </div>
+
       <div class="field">
         <label for="{{ form.vence_el.id_for_label }}">Vence el</label>
         {{ form.vence_el }}
@@ -64,81 +75,50 @@
 </form>
 
 <style>
-  /* Contenedor del form: se centra y no fuerza mínimos que rompan el modal */
-  .tarea-form{
-    width:100%;
-    max-width: 640px;
-    margin: 0 auto;
-    color:#0f172a;
-  }
+  .tarea-form{ width:100%; max-width: 640px; margin: 0 auto; color:#0f172a; }
+  .tarea-form .grid{ display:flex; flex-direction:column; gap:16px; }
+  .tarea-form .row-2{ display:grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap:16px; }
+  @media (max-width: 720px){ .tarea-form .row-2{ grid-template-columns: 1fr; } }
 
-  .tarea-form .grid{
-    display:flex;
-    flex-direction:column;
-    gap:16px;
-  }
-
-  /* Filas a dos columnas, responsivo */
-  .tarea-form .row-2{
-    display:grid;
-    grid-template-columns: repeat(2, minmax(220px, 1fr));
-    gap:16px;
-  }
-  @media (max-width: 720px){
-    .tarea-form .row-2{ grid-template-columns: 1fr; }
-  }
-
-  .tarea-form .field label{
-    display:block;
-    font-size:14px;
-    font-weight:600;
-    color:#0f172a;
-    margin-bottom:6px;
-  }
-
+  .tarea-form .field label{ display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px; }
   .tarea-form input[type="text"],
   .tarea-form input[type="date"],
   .tarea-form input[type="number"],
   .tarea-form select,
   .tarea-form textarea{
-    width:100% !important;
-    box-sizing:border-box;
-    border:1px solid #d0d7de;
-    border-radius:10px;
-    padding:10px 12px;
-    font-size:14px;
-    line-height:1.35;
-    color:#0f172a;
-    background:#fff;
+    width:100% !important; box-sizing:border-box; border:1px solid #d0d7de; border-radius:10px;
+    padding:10px 12px; font-size:14px; line-height:1.35; color:#0f172a; background:#fff;
   }
-  .tarea-form select{ height: 44px; }
-  .tarea-form select option{ color:#0f172a; background:#fff; }
-
-  .tarea-form textarea{ min-height: 130px; resize: vertical; }
-
-  .tarea-form input:focus,
-  .tarea-form select:focus,
-  .tarea-form textarea:focus{
-    outline: none;
-    border-color:#2563eb;
-    box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+  .tarea-form select{ min-height:44px; }
+  .tarea-form textarea{ min-height:130px; resize: vertical; }
+  .tarea-form input:focus, .tarea-form select:focus, .tarea-form textarea:focus{
+    outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.15);
   }
-
   .tarea-form .err{ color:#b42318; font-size:12px; margin-top:4px; }
-
-  .tarea-form .footer{
-    display:flex; justify-content:flex-end; gap:10px; margin-top:16px;
-  }
-  .btn-primary{
-    background:#2563eb; color:#fff;
-    border:1px solid #2563eb; border-radius:10px;
-    padding:10px 14px; cursor:pointer; font-weight:600;
-  }
+  .tarea-form .footer{ display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+  .btn-primary{ background:#2563eb; color:#fff; border:1px solid #2563eb; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600; }
   .btn-primary:hover{ background:#1d4ed8; }
-  .btn-outline{
-    background:#fff; color:#0f172a;
-    border:1px solid #d0d7de; border-radius:10px;
-    padding:10px 14px; cursor:pointer; font-weight:600;
-  }
+  .btn-outline{ background:#fff; color:#0f172a; border:1px solid #d0d7de; border-radius:10px; padding:10px 14px; cursor:pointer; font-weight:600; }
   .btn-outline:hover{ background:#f8fafc; }
+
+  .label-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; font-weight:600; color:#0f172a; }
+  .btn-icon{
+    width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center;
+    border:1px solid #cbd5e1; background:#fff; border-radius:999px; font-weight:700; cursor:pointer;
+  }
+  .btn-icon:hover{ background:#f8fafc; }
+
+  .chips-wrap{ display:flex; flex-wrap:wrap; gap:6px; min-height:30px; padding:4px 0; }
+  .chip{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 8px;
+    background:#eef2ff; color:#1e3a8a; border:1px solid #c7d2fe; border-radius:999px; font-size:12px; font-weight:600;
+  }
+  .chip .rm{
+    border:0; background:transparent; color:#1e3a8a; font-weight:700; line-height:1;
+    cursor:pointer; padding:0 2px; font-size:14px;
+  }
+  .chip-empty{ color:#6b7280; background:#f3f4f6; border-color:#e5e7eb; }
+
+  /* Ocultar el select real pero accesible al DOM para JS/envío */
+  .visually-hidden{ position:absolute; left:-10000px; width:1px; height:1px; overflow:hidden; }
 </style>

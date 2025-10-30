@@ -92,21 +92,38 @@ def dashboard(request):
     ctx["proyectos_existentes"] = Proyecto.objects.order_by("-creado_en")[:200]
 
     if tab == "planificados":
-        ctx["items"] = Proyecto.objects.filter(estado="planificado", is_archivado=False).order_by("-creado_en")
+        ctx["items"] = Proyecto.objects.filter(
+            estado="planificado", is_archivado=False
+        ).order_by("-creado_en")
+
     elif tab == "presupuestados":
-        ctx["items"] = Proyecto.objects.filter(estado="presupuestado", is_archivado=False).order_by("-creado_en")
+        ctx["items"] = Proyecto.objects.filter(
+            estado="presupuestado", is_archivado=False
+        ).order_by("-creado_en")
+
     elif tab == "en_progreso":
-        ctx["items"] = Proyecto.objects.filter(estado="en_progreso", is_archivado=False).order_by("-creado_en")
+        ctx["items"] = Proyecto.objects.filter(
+            estado="en_progreso", is_archivado=False
+        ).order_by("-creado_en")
+
     elif tab == "finalizados":
-        ctx["items"] = Proyecto.objects.filter(estado="finalizado", is_archivado=False).order_by("-creado_en")
+        ctx["items"] = Proyecto.objects.filter(
+            estado="finalizado", is_archivado=False
+        ).order_by("-creado_en")
+
     elif tab == "todos":
-        ctx["items"] = Proyecto.objects.filter(is_archivado=False).order_by("-creado_en")
+        ctx["items"] = Proyecto.objects.filter(
+            is_archivado=False
+        ).order_by("-creado_en")
+
     else:
+        # Tab "vencimientos": agrupamos tareas con fecha de vencimiento por proyecto
         from itertools import groupby
 
         qs = (
             Tarea.objects
-            .select_related("proyecto", "asignado_a", "proyecto__responsable")
+            .select_related("proyecto", "proyecto__responsable")
+            .prefetch_related("asignados")  # <<< clave: múltiples asignados
             .filter(proyecto__is_archivado=False, vence_el__isnull=False)
             .order_by("proyecto__nombre", "proyecto_id", "vence_el", "id")
         )
@@ -427,6 +444,37 @@ def proyecto_cerrar(request, pk):
     messages.success(request, "Proyecto finalizado.")
     return redirect("proyectos:detalle", pk=pk)
 
+from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
+from .models import Proyecto  # asegúrate del import correcto
+
+@require_POST
+def proyecto_cambiar_estado(request, pk):
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("Login requerido.")
+
+    proyecto = get_object_or_404(Proyecto, pk=pk)
+
+    # Opcional: si querés restringir quién puede cambiar el estado:
+    # if not request.user.has_perm("proyectos.change_proyecto"):
+    #     return HttpResponseForbidden("No tenés permisos.")
+
+    nuevo_estado = (request.POST.get("estado") or "").strip()
+    # Validamos contra las choices del modelo
+    valid_values = {k for k, _ in getattr(Proyecto, "ESTADOS", [])} or {
+        "nuevo", "en_curso", "en_pausa", "finalizado", "cancelado"
+    }
+    if nuevo_estado not in valid_values:
+        return HttpResponseBadRequest("Estado inválido.")
+
+    proyecto.estado = nuevo_estado
+    proyecto.save(update_fields=["estado"])
+
+    # Para actualizar el label visible sin recargar
+    display_map = dict(getattr(Proyecto, "ESTADOS", []))
+    return JsonResponse({"ok": True, "estado": nuevo_estado, "display": display_map.get(nuevo_estado, nuevo_estado)})
+
 
 @login_required
 def proyecto_reabrir(request, pk):
@@ -467,13 +515,14 @@ def proyecto_reabrir(request, pk):
                             url=f"/proyectos/{proyecto.id}/",
                         )
                     for t, _ in updates:
-                        if t.asignado_a:
+                        for u in t.asignados.all():
                             Notificacion.objects.create(
-                                user=t.asignado_a,
+                                user=u,
                                 titulo=f"Tarea reabierta: {t.titulo}",
                                 cuerpo=f"Nuevo vencimiento: {t.vence_el:%d/%m/%Y} (Proyecto {proyecto.nombre})",
                                 url=reverse("proyectos:tarea_open", args=[t.id]),
                             )
+
                 messages.success(request, "Proyecto reabierto y tareas actualizadas.")
                 return redirect("proyectos:detalle", pk=pk)
     else:
@@ -486,10 +535,15 @@ def proyecto_reabrir(request, pk):
 # TAREAS
 # ===========================
 def _exclude_admin(form):
-    """Oculta 'admin' del select asignado_a (si existe el campo)."""
+    """Oculta 'admin' del/los select(s) de asignación si existen."""
+    # Caso FK antiguo
     if "asignado_a" in form.fields:
         qs = form.fields["asignado_a"].queryset
         form.fields["asignado_a"].queryset = qs.exclude(username__iexact="admin")
+    # Caso M2M nuevo
+    if "asignados" in form.fields:
+        qs = form.fields["asignados"].queryset
+        form.fields["asignados"].queryset = qs.exclude(username__iexact="admin")
 
 
 @login_required
@@ -505,7 +559,6 @@ def tarea_crear(request, proyecto_id):
             "proyectos/_tarea_form.html",
             {
                 "form": form,
-                # ✅ le pasamos action_url para que el <form> sepa a dónde POSTear
                 "action_url": reverse("proyectos:tarea_crear", args=[proyecto.id]),
                 "submit_label": "Crear tarea",
             },
@@ -522,15 +575,28 @@ def tarea_crear(request, proyecto_id):
             t.proyecto = proyecto
             t.creado_por = request.user
             t.save()
+            form.save_m2m()  # ← necesario para 'asignados'
 
             # Notificación / historial
-            if Notificacion and t.asignado_a:
-                Notificacion.objects.create(
-                    user=t.asignado_a,
-                    titulo=f"Nueva tarea en {proyecto.nombre}",
-                    cuerpo=f"{t.titulo}",
-                    url=reverse("proyectos:tarea_open", args=[t.id]),  # abre modal en destino
-                )
+            if Notificacion:
+                # Notificar a todos los asignados excepto quien crea
+                if hasattr(t, "asignados"):
+                    for u in t.asignados.exclude(id=request.user.id):
+                        Notificacion.objects.create(
+                            user=u,
+                            titulo=f"Nueva tarea en {proyecto.nombre}",
+                            cuerpo=f"{t.titulo}",
+                            url=reverse("proyectos:tarea_open", args=[t.id]),
+                        )
+                # (compat) si existiera el FK antiguo y no hay M2M:
+                elif getattr(t, "asignado_a_id", None) and t.asignado_a_id != request.user.id:
+                    Notificacion.objects.create(
+                        user=t.asignado_a,
+                        titulo=f"Nueva tarea en {proyecto.nombre}",
+                        cuerpo=f"{t.titulo}",
+                        url=reverse("proyectos:tarea_open", args=[t.id]),
+                    )
+
             HistorialProyecto.objects.create(
                 proyecto=proyecto,
                 tipo="estado_tarea",
@@ -562,12 +628,8 @@ def tarea_crear(request, proyecto_id):
 
 @login_required
 def tarea_detalle_modal(request, pk: int):
-    """
-    Devuelve el HTML del detalle de la tarea (partial) para el modal.
-    Incluye histórico de mensajes y flag de permiso para chatear.
-    """
     tarea = get_object_or_404(
-        Tarea.objects.select_related("proyecto", "asignado_a"),
+        Tarea.objects.select_related("proyecto", "asignado_a"),  # select_related del FK no molesta
         pk=pk
     )
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
@@ -582,7 +644,8 @@ def tarea_detalle_modal(request, pk: int):
     puede_chatear = (
         request.user.has_perm("proyectos.can_manage_proyectos")
         or (tarea.proyecto and tarea.proyecto.responsable_id == request.user.id)
-        or (tarea.asignado_a_id == request.user.id if tarea.asignado_a_id else False)
+        or (hasattr(tarea, "asignados") and tarea.asignados.filter(id=request.user.id).exists())
+        or (getattr(tarea, "asignado_a_id", None) == request.user.id)  # compat FK
     )
 
     html = render_to_string(
@@ -599,14 +662,14 @@ def tarea_detalle_modal(request, pk: int):
 
 @login_required
 def tarea_chat_enviar(request, pk: int):
-    """POST AJAX con 'mensaje' → crea Comentario y devuelve el li renderizado."""
     tarea = get_object_or_404(Tarea.objects.select_related("proyecto"), pk=pk)
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
 
     puede_chatear = (
         request.user.has_perm("proyectos.can_manage_proyectos")
         or (tarea.proyecto and tarea.proyecto.responsable_id == request.user.id)
-        or (tarea.asignado_a_id == request.user.id if tarea.asignado_a_id else False)
+        or (hasattr(tarea, "asignados") and tarea.asignados.filter(id=request.user.id).exists())
+        or (getattr(tarea, "asignado_a_id", None) == request.user.id)
     )
     if not puede_chatear:
         return JsonResponse({"ok": False, "error": "Sin permiso para chatear en esta tarea."}, status=403)
@@ -654,23 +717,33 @@ def tarea_editar(request, pk):
     # POST (guardar)
     if request.method == "POST":
         is_ajax = _is_ajax(request)
+        antes_ids = set()
+        if hasattr(tarea, "asignados"):
+            antes_ids = set(tarea.asignados.values_list("id", flat=True))
+
         form = TareaForm(request.POST, instance=tarea)
         _exclude_admin(form)
         if form.is_valid():
-            antes = tarea.estado
-            t = form.save()
+            antes_estado = tarea.estado
+            t = form.save()  # ModelForm guarda M2M al tener instance
 
-            if Notificacion and t.asignado_a and t.asignado_a_id != request.user.id:
-                Notificacion.objects.create(
-                    user=t.asignado_a,
-                    titulo=f"Tarea actualizada en {t.proyecto.nombre}",
-                    cuerpo=f"{t.titulo}",
-                    url=reverse("proyectos:tarea_open", args=[t.id]),
-                )
-            if antes != t.estado:
+            # Notificar a los NUEVOS asignados
+            if Notificacion and hasattr(t, "asignados"):
+                despues_ids = set(t.asignados.values_list("id", flat=True))
+                nuevos = despues_ids - antes_ids
+                for uid in nuevos:
+                    if uid != request.user.id:
+                        Notificacion.objects.create(
+                            user_id=uid,
+                            titulo=f"Tarea actualizada en {t.proyecto.nombre}",
+                            cuerpo=f"{t.titulo}",
+                            url=reverse("proyectos:tarea_open", args=[t.id]),
+                        )
+
+            if antes_estado != t.estado:
                 HistorialProyecto.objects.create(
                     proyecto=t.proyecto, tipo="estado_tarea", actor=request.user,
-                    descripcion=f"Cambio de estado: '{t.titulo}' {antes} → {t.estado}."
+                    descripcion=f"Cambio de estado: '{t.titulo}' {antes_estado} → {t.estado}."
                 )
 
             if is_ajax:
@@ -695,10 +768,12 @@ def tarea_cambiar_estado(request, pk):
         antes = tarea.estado
         tarea.estado = nuevo
         tarea.save(update_fields=["estado", "actualizado_en"])
+
         HistorialProyecto.objects.create(
             proyecto=tarea.proyecto, tipo="estado_tarea", actor=request.user,
             descripcion=f"Cambio de estado: '{tarea.titulo}' {antes} → {tarea.estado}."
         )
+
         if Notificacion and tarea.proyecto.responsable:
             Notificacion.objects.create(
                 user=tarea.proyecto.responsable,
@@ -706,6 +781,14 @@ def tarea_cambiar_estado(request, pk):
                 cuerpo=f"{tarea.titulo}: {antes} → {tarea.estado} (Proyecto {tarea.proyecto.nombre})",
                 url=reverse("proyectos:tarea_open", args=[tarea.id]),
             )
+        if Notificacion:
+            for u in tarea.asignados.all():
+                Notificacion.objects.create(
+                    user=u,
+                    titulo=f"Estado de tarea cambiado",
+                    cuerpo=f"{tarea.titulo}: {antes} → {tarea.estado} (Proyecto {tarea.proyecto.nombre})",
+                    url=reverse("proyectos:tarea_open", args=[tarea.id]),
+                )
         messages.success(request, "Estado actualizado.")
 
     ref = request.META.get("HTTP_REFERER")

@@ -193,7 +193,20 @@ class ProyectoForm(forms.ModelForm):
 # ===========================
 # FORMULARIO DE TAREA
 # ===========================
+# ===========================
+# FORMULARIO DE TAREA
+# ===========================
 class TareaForm(forms.ModelForm):
+    asignados = forms.ModelMultipleChoiceField(
+        label="Asignado a",
+        required=False,
+        queryset=User.objects.filter(is_active=True).exclude(username__iexact="admin"),
+        widget=forms.SelectMultiple(attrs={
+            "class": "form-select",
+            "style": "min-height: 80px;",
+        })
+    )
+
     class Meta:
         model = Tarea
         fields = [
@@ -201,7 +214,7 @@ class TareaForm(forms.ModelForm):
             "descripcion",
             "estado",
             "prioridad",
-            "asignado_a",
+            "asignados",  # <--- reemplaza asignado_a
             "vence_el",
             "estimacion_horas",
         ]
@@ -209,6 +222,12 @@ class TareaForm(forms.ModelForm):
             "descripcion": forms.Textarea(attrs={"rows": 3}),
             "vence_el": forms.DateInput(attrs={"type": "date"}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Quitar usuario admin del selector
+        if "asignados" in self.fields:
+            self.fields["asignados"].queryset = self.fields["asignados"].queryset.exclude(username__iexact="admin")
 
 
 # ===========================

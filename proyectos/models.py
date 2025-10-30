@@ -87,9 +87,27 @@ class Tarea(models.Model):
     # 🔧 fix: max_length correcto, sin hacks
     estado = models.CharField(max_length=10, choices=ESTADOS, default="todo")
     prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default="media")
+
+    # ===== NUEVO (mínimo): permitir múltiples asignados sin romper lo actual =====
+    asignados = models.ManyToManyField(
+        User, blank=True, related_name="tareas_asignadas_m2m"
+    )
+    # Mantengo el FK existente para compatibilidad (lo migraremos después si querés)
     asignado_a = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="tareas_asignadas"
     )
+    # ============================================================================
+    # Acceso unificado (útil mientras conviven ambos campos):
+    @property
+    def asignados_effective(self):
+        """Lista de usuarios asignados incluyendo el viejo FK si existe y no está en el M2M."""
+        ids = set(self.asignados.values_list("id", flat=True))
+        out = list(self.asignados.all())
+        if self.asignado_a_id and self.asignado_a_id not in ids and self.asignado_a:
+            out.append(self.asignado_a)
+        return out
+    # ============================================================================
+
     vence_el = models.DateField(null=True, blank=True)
     estimacion_horas = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
 
@@ -234,7 +252,7 @@ class HoraTrabajo(models.Model):
     aprobada_en = models.DateTimeField(null=True, blank=True)
 
     creado_en = models.DateTimeField(auto_now_add=True)
-    actualizado_en = models.DateTimeField(auto_now=True)
+    actualizado_en = models.DateTimeField(auto_now_add=False, auto_now=True)
 
     class Meta:
         ordering = ("-fecha", "-creado_en")
