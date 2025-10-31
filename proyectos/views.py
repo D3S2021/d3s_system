@@ -806,6 +806,89 @@ def tarea_editar(request, pk):
 def tarea_cambiar_estado(request, pk):
     tarea = get_object_or_404(Tarea.objects.select_related("proyecto"), pk=pk)
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
+
+    is_ajax = (request.headers.get("x-requested-with") or "").lower() == "xmlhttprequest"
+    action = (request.POST.get("action") or "").strip().lower()
+
+    # ==== NUEVO: acciones de flujo rápido desde el modal ====
+    if action in {"start", "finish"}:
+        # Debe estar asignado (por M2M o FK antiguo)
+        asignado = False
+        if hasattr(tarea, "asignados"):
+            asignado = tarea.asignados.filter(id=request.user.id).exists()
+        if getattr(tarea, "asignado_a_id", None) == request.user.id:
+            asignado = True
+
+        if not asignado:
+            if is_ajax:
+                return JsonResponse({"ok": False, "error": "No estás asignado a esta tarea."}, status=403)
+            messages.error(request, "No estás asignado a esta tarea.")
+            ref = request.META.get("HTTP_REFERER")
+            return redirect(ref) if ref else redirect("proyectos:detalle", pk=tarea.proyecto_id)
+
+        antes = tarea.estado
+        if action == "start":
+            if tarea.estado != "todo":
+                if is_ajax:
+                    return JsonResponse({"ok": False, "error": "Solo se puede empezar si está 'Por hacer'."}, status=400)
+                messages.error(request, "Solo se puede empezar si la tarea está 'Por hacer'.")
+            else:
+                tarea.estado = "doing"
+                # Se la queda el usuario que la empieza
+                if hasattr(tarea, "asignados"):
+                    tarea.asignados.set([request.user])
+                elif hasattr(tarea, "asignado_a_id"):
+                    tarea.asignado_a = request.user
+                tarea.save(update_fields=["estado", "actualizado_en"])
+
+                HistorialProyecto.objects.create(
+                    proyecto=tarea.proyecto, tipo="estado_tarea", actor=request.user,
+                    descripcion=f"Cambio de estado: '{tarea.titulo}' {antes} → {tarea.estado}."
+                )
+
+                if Notificacion and tarea.proyecto.responsable:
+                    Notificacion.objects.create(
+                        user=tarea.proyecto.responsable,
+                        titulo="Estado de tarea cambiado",
+                        cuerpo=f"{tarea.titulo}: {antes} → {tarea.estado} (Proyecto {tarea.proyecto.nombre})",
+                        url=reverse("proyectos:tarea_open", args=[tarea.id]),
+                    )
+
+                if is_ajax:
+                    return JsonResponse({"ok": True, "estado": tarea.estado})
+                messages.success(request, "Tarea iniciada.")
+        elif action == "finish":
+            if tarea.estado != "doing":
+                if is_ajax:
+                    return JsonResponse({"ok": False, "error": "Solo se puede terminar si está 'En curso'."}, status=400)
+                messages.error(request, "Solo se puede terminar si la tarea está 'En curso'.")
+            else:
+                tarea.estado = "review"  # pasa a En revisión
+                tarea.save(update_fields=["estado", "actualizado_en"])
+
+                HistorialProyecto.objects.create(
+                    proyecto=tarea.proyecto, tipo="estado_tarea", actor=request.user,
+                    descripcion=f"Cambio de estado: '{tarea.titulo}' {antes} → {tarea.estado}."
+                )
+
+                if Notificacion and tarea.proyecto.responsable:
+                    Notificacion.objects.create(
+                        user=tarea.proyecto.responsable,
+                        titulo="Tarea para revisión",
+                        cuerpo=f"{tarea.titulo} quedó lista para revisión (Proyecto {tarea.proyecto.nombre})",
+                        url=reverse("proyectos:tarea_open", args=[tarea.id]),
+                    )
+
+                if is_ajax:
+                    return JsonResponse({"ok": True, "estado": tarea.estado})
+                messages.success(request, "Tarea enviada a revisión.")
+
+        # Si no es AJAX, seguimos el redirect estándar
+        ref = request.META.get("HTTP_REFERER")
+        return redirect(ref) if ref else redirect("proyectos:detalle", pk=tarea.proyecto_id)
+    # ==== FIN NUEVO ====
+
+    # --- Lógica existente: cambio directo via POST["estado"] ---
     nuevo = request.POST.get("estado")
     if nuevo in dict(Tarea.ESTADOS):
         antes = tarea.estado

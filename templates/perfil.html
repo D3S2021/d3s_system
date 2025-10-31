@@ -175,18 +175,53 @@
   }
   .btn-detalle:hover { background: #dbeafe; }
 
-  /* Botón primario “Tomar” */
-  .btn-tomar{
+  /* Botones de acción en cards */
+  .btn-tomar,
+  .btn-estado{
     border:none;
-    background:#2563eb;
-    color:#fff;
     font-weight:700;
     border-radius:6px;
     padding:4px 10px;
     cursor:pointer;
-    transition:opacity .15s ease;
+    transition:opacity .15s ease, background .15s ease;
+    color:#fff;
   }
+  .btn-tomar{ background:#2563eb; }
   .btn-tomar:hover{ opacity:.9; }
+
+  .btn-start{ background:#f59e0b; }     /* Empezar */
+  .btn-start:hover{ background:#d97706; }
+  .btn-finish{ background:#16a34a; }    /* Terminada */
+  .btn-finish:hover{ background:#15803d; }
+
+  /* ===== NUEVO: filtro junto al título ===== */
+  .tareas-head{
+    margin-top:28px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .tareas-filter{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .filter-btn{
+    border:1px solid #e5e7eb;
+    background:#fff;
+    color:#0f172a;
+    border-radius:999px;
+    padding:4px 10px;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+  }
+  .filter-btn.is-active{
+    background:#2563eb;
+    border-color:#2563eb;
+    color:#fff;
+  }
 </style>
 {% endblock %}
 
@@ -268,7 +303,9 @@
   </div>
 </div>
 
-<h2>Mis transacciones enviadas (pendientes)</h2>
+<h2 class="tareas-head">
+  <span>Mis transacciones enviadas</span>
+</h2>
 {% if mis_pendientes %}
   <table class="perfil-txs">
     <thead><tr><th>Fecha</th><th>Importe</th><th>Descripción</th><th>Estado</th><th>Editar</th></tr></thead>
@@ -293,12 +330,22 @@
 {% endif %}
 
 {# ========= MIS TAREAS ASIGNADAS ========= #}
-<h2 style="margin-top:28px">Mis tareas</h2>
+
+{# NUEVO: título + filtro al lado #}
+<h2 class="tareas-head">
+  <span>Mis tareas</span>
+  <span class="tareas-filter" aria-label="Filtrar tareas">
+    <button type="button" class="filter-btn is-active" data-filter="all">Todas</button>
+    <button type="button" class="filter-btn" data-filter="todo">Por hacer</button>
+    <button type="button" class="filter-btn" data-filter="doing">En curso</button>
+  </span>
+</h2>
 
 {% if tareas_asignadas %}
-  <div class="tareas-grid">
+  <div class="tareas-grid" id="tareasGrid">
     {% for t in tareas_asignadas %}
-      <div class="tarea-card">
+      {# NUEVO: data-estado para filtrar #}
+      <div class="tarea-card" data-estado="{{ t.estado }}">
         <div class="tarea-header">
           <div class="tarea-titulo">{{ t.titulo }}</div>
 
@@ -309,13 +356,32 @@
               data-url="{% url 'proyectos:tarea_detalle_modal' t.id %}?context=perfil"
             >Detalle</button>
 
-            {# --- BOTÓN TOMAR (solo si hay más de un asignado y el usuario está asignado) --- #}
+            {# --- BOTÓN TOMAR (si hay >1 asignado y el usuario está asignado) --- #}
             {% if t.asignados.count > 1 and request.user in t.asignados.all %}
               <form method="post" action="{% url 'proyectos:tarea_tomar' t.id %}" style="display:inline;">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <button type="submit" class="btn-tomar">Tomar</button>
               </form>
+            {% endif %}
+
+            {# --- Botón de estado (Empezar/Terminada) --- #}
+            {% if request.user in t.asignados.all %}
+              {% if t.estado == 'todo' %}
+                <button type="button"
+                        class="btn-estado btn-start js-tarea-estado"
+                        data-action="start"
+                        data-url="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+                  Empezar
+                </button>
+              {% elif t.estado == 'doing' %}
+                <button type="button"
+                        class="btn-estado btn-finish js-tarea-estado"
+                        data-action="finish"
+                        data-url="{% url 'proyectos:tarea_cambiar_estado' t.id %}">
+                  Terminada
+                </button>
+              {% endif %}
             {% endif %}
           </div>
         </div>
@@ -548,6 +614,29 @@ function getCookie(name){
   return m ? m.pop() : '';
 }
 
+/* ===== NUEVO: Filtro de tareas (cliente) ===== */
+(function(){
+  const grid = document.getElementById('tareasGrid');
+  const buttons = document.querySelectorAll('.tareas-filter .filter-btn');
+  if(!grid || !buttons.length) return;
+
+  function applyFilter(val){
+    const cards = grid.querySelectorAll('.tarea-card');
+    cards.forEach(card=>{
+      const est = (card.getAttribute('data-estado') || '').trim();
+      const show = (val === 'all') || (est === val);
+      card.style.display = show ? '' : 'none';
+    });
+  }
+  buttons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      buttons.forEach(b=>b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      applyFilter(btn.dataset.filter);
+    });
+  });
+})();
+
 /* Toggle de detalles en "Mis horas" (agrupado) */
 document.addEventListener('click', function(e){
   const btn = e.target.closest('.js-ver-detalles');
@@ -697,5 +786,50 @@ document.addEventListener('click', function(e){
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
 })();
+
+/* Acciones Empezar/Terminada desde las cards (ya lo tenías) */
+document.addEventListener('click', async function(e){
+  const btn = e.target.closest('.js-tarea-estado');
+  if (!btn) return;
+
+  const action = btn.getAttribute('data-action');
+  const url    = btn.getAttribute('data-url');
+  if (!action || !url) return;
+
+  btn.disabled = true;
+  try{
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body: new URLSearchParams({ action })
+    });
+    const data = await r.json();
+
+    if (!data.ok){
+      alert(data.error || 'No se pudo actualizar el estado.');
+      btn.disabled = false;
+      return;
+    }
+
+    if (action === 'start'){
+      btn.textContent = 'Terminada';
+      btn.classList.remove('btn-start');
+      btn.classList.add('btn-finish');
+      btn.setAttribute('data-action', 'finish');
+      btn.disabled = false;
+    } else {
+      const card = btn.closest('.tarea-card');
+      if (card) card.remove();
+    }
+  }catch(err){
+    console.error(err);
+    alert('Error de red.');
+    btn.disabled = false;
+  }
+});
 </script>
 {% endblock %}
