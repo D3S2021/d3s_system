@@ -282,6 +282,20 @@ class CierreIncompletoForm(forms.Form):
 # ===========================
 # HORAS DE TRABAJO
 # ===========================
+from django import forms
+from django.contrib.auth import get_user_model
+from django.db.models import Q
+
+from .models import HoraTrabajo, Proyecto
+
+User = get_user_model()
+
+
+from django import forms
+from django.contrib.auth.models import User
+from django.db.models import Q
+from .models import HoraTrabajo, Proyecto
+
 class HoraTrabajoForm(forms.ModelForm):
     inicio = forms.TimeField(
         label="Inicio",
@@ -303,30 +317,56 @@ class HoraTrabajoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        request_user = kwargs.pop("request_user", None)
-        puede_asignar = kwargs.pop("puede_asignar", False)
+        # 👉 mismos argumentos que ya venías usando
+        self._request_user = kwargs.pop("request_user", None)
+        self._puede_asignar = kwargs.pop("puede_asignar", False)
         super().__init__(*args, **kwargs)
 
-        # Usuario visible solo si tiene permisos
-        if puede_asignar:
-            self.fields["usuario"].queryset = User.objects.filter(is_active=True)
+        # ===== Usuario =====
+        if self._puede_asignar:
+            # MARTÍN (admin / líder) puede elegir a otro
+            self.fields["usuario"].queryset = User.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
+            self.fields["usuario"].required = True
         else:
-            self.fields["usuario"].queryset = User.objects.filter(pk=request_user.pk)
+            # BENJAMÍN (solo carga lo suyo) → oculto y forzado al request.user
+            self.fields["usuario"].queryset = User.objects.filter(pk=getattr(self._request_user, "pk", None))
             self.fields["usuario"].widget = forms.HiddenInput()
+            self.fields["usuario"].required = False
+            if self._request_user:
+                self.initial["usuario"] = self._request_user.pk
 
-        # Proyectos disponibles
-        if request_user and request_user.has_perm("proyectos.can_manage_proyectos"):
+        # ===== Proyectos visibles =====
+        u = self._request_user
+        if u and u.has_perm("proyectos.can_manage_proyectos"):
             qs = Proyecto.objects.filter(is_archivado=False)
         else:
-            qs = Proyecto.objects.filter(Q(is_archivado=False) &
-                                         (Q(responsable=request_user) |
-                                          Q(miembros=request_user))).distinct()
+            qs = Proyecto.objects.filter(
+                Q(is_archivado=False) &
+                (Q(responsable=u) | Q(miembros=u))
+            ).distinct()
         self.fields["proyecto"].queryset = qs.order_by("nombre")
 
     def clean(self):
         cleaned = super().clean()
-        inicio = cleaned.get("inicio")
-        fin = cleaned.get("fin")
+
+        # Fuerza el usuario si NO puede asignar a otros (evita manipulación del POST)
+        if not self._puede_asignar:
+            if not self._request_user:
+                raise forms.ValidationError("No se pudo determinar el usuario de la sesión.")
+            cleaned["usuario"] = self._request_user
+
+        # Validación de horarios
+        inicio, fin = cleaned.get("inicio"), cleaned.get("fin")
         if inicio and fin and inicio >= fin:
             raise forms.ValidationError("La hora de inicio debe ser anterior a la de fin.")
+
         return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        # Refuerzo defensivo: si no puede asignar, siempre se guarda con el request_user
+        if not self._puede_asignar and self._request_user:
+            obj.usuario = self._request_user
+        if commit:
+            obj.save()
+        return obj

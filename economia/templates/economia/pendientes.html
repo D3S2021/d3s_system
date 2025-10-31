@@ -4,6 +4,14 @@
 
 {% block content_adminlike %}
 
+<!-- Toolbar: Aprobar todas -->
+<div style="display:flex;justify-content:flex-end;margin:8px 0;">
+  <button id="btnAprobarTodas" type="button"
+          style="border:none;background:#16a34a;color:#fff;font-weight:700;border-radius:8px;padding:8px 14px;cursor:pointer;">
+    Aprobar todas
+  </button>
+</div>
+
 <table>
   <thead>
     <tr>
@@ -84,5 +92,127 @@
       });
     }
   });
+</script>
+
+<!-- ===== NUEVO: Toast minimal ===== -->
+<style>
+  .toast {
+    position: fixed; top: 18px; right: 18px; z-index: 3000;
+    background: #0f172a; color: #fff; border-radius: 8px;
+    padding: 10px 14px; box-shadow: 0 10px 25px rgba(0,0,0,.2);
+    opacity: 0; transform: translateY(-8px); transition: opacity .2s, transform .2s;
+    font-weight: 600; font-size: 14px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.ok { background:#14532d; }
+  .toast.warn { background:#b45309; }
+  .toast.err { background:#7f1d1d; }
+</style>
+<div id="toast" class="toast" aria-live="polite" aria-atomic="true" role="status"></div>
+<script>
+(function(){
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+  function toast(msg, type='ok', ms=2200){
+    const t = document.getElementById('toast');
+    if(!t) return;
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+    requestAnimationFrame(()=> t.classList.add('show'));
+    setTimeout(()=> t.classList.remove('show'), ms);
+  }
+  function markError(el, on){
+    if(!el) return;
+    el.style.outline = on ? '2px solid #dc2626' : '';
+    el.style.borderColor = on ? '#dc2626' : '';
+    el.style.backgroundColor = on ? '#fff1f2' : '';
+  }
+
+  const btn = document.getElementById('btnAprobarTodas');
+  if(!btn) return;
+
+  btn.addEventListener('click', async function(){
+    btn.disabled = true;
+    const oldText = btn.textContent;
+    btn.textContent = 'Aprobando…';
+
+    // Solo forms del tbody (evita agarrar otros forms de la página)
+    const forms = Array.from(document.querySelectorAll('tbody form'))
+      .filter(f => f.querySelector('.btn-aprobar'));
+
+    // 1) Validación: todas deben tener categoría
+    let firstMissing = null;
+    forms.forEach(f=>{
+      const sel = f.querySelector('select[name="categoria_id"]');
+      const ok  = sel && sel.value && String(sel.value).trim() !== '';
+      markError(sel, !ok);
+      if(!ok && !firstMissing) firstMissing = sel;
+    });
+
+    if(firstMissing){
+      firstMissing.scrollIntoView({behavior:'smooth', block:'center'});
+      toast('Falta categoría en una o más filas.', 'warn', 2800);
+      btn.disabled = false;
+      btn.textContent = oldText;
+      return;
+    }
+
+    // 2) Envío REAL: igual que el botón "Aprobar" individual, con CSRF en header
+    let okCount = 0, failCount = 0;
+
+    for(const f of forms){
+      try{
+        const fd = new FormData(f);
+        fd.set('accion', 'aprobar');  // fuerza intención
+        const csrf = f.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+
+        const r = await fetch(f.action, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrf
+          },
+          body: fd
+        });
+
+        let success = r.ok;
+        try{
+          const data = await r.json();
+          if (typeof data.ok !== 'undefined') success = !!data.ok;
+        }catch(_){ /* pudo venir HTML/redirect; usamos r.ok */ }
+
+        if(success){
+          okCount++;
+          const tr = f.closest('tr');
+          if (tr){
+            tr.style.transition = 'background .25s ease, opacity .25s ease';
+            tr.style.background = '#ecfdf5';
+            tr.style.opacity = '0.4';
+            setTimeout(()=> tr.remove(), 220);
+          }
+        }else{
+          failCount++;
+        }
+      }catch(err){
+        console.error(err);
+        failCount++;
+      }
+    }
+
+    if (okCount && !failCount){
+      toast(`Listo: ${okCount} transacción(es) aprobada(s).`, 'ok');
+    }else if (okCount && failCount){
+      toast(`Hecho: ${okCount} aprobadas, ${failCount} con error.`, 'warn', 3200);
+    }else{
+      toast('No se pudo aprobar ninguna.', 'err', 3000);
+    }
+
+    btn.disabled = false;
+    btn.textContent = oldText;
+  });
+})();
 </script>
 {% endblock %}

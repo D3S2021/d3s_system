@@ -1026,15 +1026,22 @@ def horas_nueva(request):
     preselect_proyecto_id = request.GET.get("proyecto")
 
     if request.method == "POST":
+        # 👇 Inyectamos el usuario logueado si NO puede asignar horas a otros
+        if not puede_asignar:
+            data = request.POST.copy()
+            data["usuario"] = str(request.user.pk)
+        else:
+            data = request.POST
+
         form = HoraTrabajoForm(
-            request.POST,
+            data,
             request_user=request.user,
             puede_asignar=puede_asignar,
         )
         if form.is_valid():
             obj = form.save(commit=False)
             if not puede_asignar:
-                obj.usuario = request.user
+                obj.usuario = request.user  # doble seguridad del lado servidor
 
             inicio = form.cleaned_data.get("inicio")
             fin = form.cleaned_data.get("fin")
@@ -1045,10 +1052,12 @@ def horas_nueva(request):
                 form.add_error("fin", "Este campo es obligatorio.")
 
             if inicio and fin:
+                # Aceptamos tanto time objects como strings "HH:MM"
+                from datetime import datetime, date
                 if isinstance(inicio, str) or isinstance(fin, str):
                     try:
-                        ini_dt = datetime.strptime(inicio.strip(), "%H:%M")
-                        fin_dt = datetime.strptime(fin.strip(), "%H:%M")
+                        ini_dt = datetime.strptime(str(inicio).strip(), "%H:%M")
+                        fin_dt = datetime.strptime(str(fin).strip(), "%H:%M")
                         delta_h = (fin_dt - ini_dt).seconds / 3600.0
                     except Exception:
                         form.add_error(None, "Formato de hora inválido. Usá HH:MM.")
@@ -1065,17 +1074,21 @@ def horas_nueva(request):
                     else:
                         obj.horas = round(delta_h, 2)
 
-            if form.errors or obj.horas is None:
-                if obj.horas is None and not form.errors:
+            if form.errors or getattr(obj, "horas", None) is None:
+                if getattr(obj, "horas", None) is None and not form.errors:
                     form.add_error(None, "Debés completar Inicio y Fin para calcular las horas.")
                 if is_ajax:
-                    html = render_to_string("proyectos/_horas_form.html",
-                                            {"form": form, "puede_asignar": puede_asignar},
-                                            request=request)
+                    html = render_to_string(
+                        "proyectos/_horas_form.html",
+                        {"form": form, "puede_asignar": puede_asignar},
+                        request=request,
+                    )
                     return JsonResponse({"ok": False, "html": html}, status=400)
-                return render(request, "proyectos/horas_form.html", {
-                    "form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar,
-                })
+                return render(
+                    request,
+                    "proyectos/horas_form.html",
+                    {"form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar},
+                )
 
             obj.save()
             if is_ajax:
@@ -1083,10 +1096,13 @@ def horas_nueva(request):
             messages.success(request, "Horas cargadas.")
             return redirect("proyectos:horas_mias")
 
+        # form inválido
         if is_ajax:
-            html = render_to_string("proyectos/_horas_form.html",
-                                    {"form": form, "puede_asignar": puede_asignar},
-                                    request=request)
+            html = render_to_string(
+                "proyectos/_horas_form.html",
+                {"form": form, "puede_asignar": puede_asignar},
+                request=request,
+            )
             return JsonResponse({"ok": False, "html": html}, status=400)
 
     else:
@@ -1097,22 +1113,28 @@ def horas_nueva(request):
             except (TypeError, ValueError):
                 pass
 
+        # 👇 si NO puede asignar, pre-cargamos su propio usuario (aunque el campo esté oculto)
+        if not puede_asignar:
+            initial["usuario"] = request.user.pk
+
         form = HoraTrabajoForm(
             request_user=request.user,
             puede_asignar=puede_asignar,
             initial=initial,
         )
         if is_ajax:
-            html = render_to_string("proyectos/_horas_form.html",
-                                    {"form": form, "puede_asignar": puede_asignar},
-                                    request=request)
+            html = render_to_string(
+                "proyectos/_horas_form.html",
+                {"form": form, "puede_asignar": puede_asignar},
+                request=request,
+            )
             return HttpResponse(html)
 
-    return render(request, "proyectos/horas_form.html", {
-        "form": form,
-        "titulo": "Cargar horas",
-        "puede_asignar": puede_asignar,
-    })
+    return render(
+        request,
+        "proyectos/horas_form.html",
+        {"form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar},
+    )
 
 
 @login_required
