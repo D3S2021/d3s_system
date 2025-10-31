@@ -108,7 +108,7 @@
   .btn-link { border:none; background:transparent; color:#2c7be5; cursor:pointer; font-weight:600; padding:0; }
   .btn-link:hover { text-decoration:underline; }
 
-  /* ===== NUEVO: estilos cards para "Mis tareas" ===== */
+  /* ===== Cards “Mis tareas” ===== */
   .tareas-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -132,6 +132,11 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+  .tarea-actions {
+    display:flex;
+    gap:8px;
+    align-items:center;
   }
   .tarea-titulo {
     font-weight: 700;
@@ -169,6 +174,19 @@
     transition: background 0.2s ease;
   }
   .btn-detalle:hover { background: #dbeafe; }
+
+  /* Botón primario “Tomar” */
+  .btn-tomar{
+    border:none;
+    background:#2563eb;
+    color:#fff;
+    font-weight:700;
+    border-radius:6px;
+    padding:4px 10px;
+    cursor:pointer;
+    transition:opacity .15s ease;
+  }
+  .btn-tomar:hover{ opacity:.9; }
 </style>
 {% endblock %}
 
@@ -283,16 +301,29 @@
       <div class="tarea-card">
         <div class="tarea-header">
           <div class="tarea-titulo">{{ t.titulo }}</div>
-          {# Pasamos context=perfil para que el partial muestre el detalle reducido #}
-          <button
-            type="button"
-            class="btn-detalle js-open-tarea"
-            data-url="{% url 'proyectos:tarea_detalle_modal' t.id %}?context=perfil"
-          >Detalle</button>
+
+          <div class="tarea-actions">
+            <button
+              type="button"
+              class="btn-detalle js-open-tarea"
+              data-url="{% url 'proyectos:tarea_detalle_modal' t.id %}?context=perfil"
+            >Detalle</button>
+
+            {# --- BOTÓN TOMAR (solo si hay más de un asignado y el usuario está asignado) --- #}
+            {% if t.asignados.count > 1 and request.user in t.asignados.all %}
+              <form method="post" action="{% url 'proyectos:tarea_tomar' t.id %}" style="display:inline;">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button type="submit" class="btn-tomar">Tomar</button>
+              </form>
+            {% endif %}
+          </div>
         </div>
+
         {% if t.proyecto %}
           <div class="tarea-proyecto">{{ t.proyecto.nombre }}</div>
         {% endif %}
+
         <div class="tarea-info">
           <div><span class="lbl">Vence:</span> {% if t.vence_el %}{{ t.vence_el|date:"d/m/Y" }}{% else %}—{% endif %}</div>
           <div><span class="lbl">Prioridad:</span> <span class="badge">{{ t.get_prioridad_display|default:"—" }}</span></div>
@@ -377,7 +408,6 @@
         open();
         const url = btn.dataset.url + (btn.dataset.url.includes('?') ? '&' : '?') + '_ts=' + Date.now();
         fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-
           .then(r => r.text())
           .then(html => { container.innerHTML = html; attachChatHandlers(); })
           .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el detalle.</p>'; });

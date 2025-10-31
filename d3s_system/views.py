@@ -29,6 +29,7 @@ def logout_then_login(request):
 # ------------------------------------------------------------
 # PERFIL DE USUARIO
 # ------------------------------------------------------------
+# ========= PERFIL =========
 @login_required
 def perfil_usuario(request):
     """
@@ -37,6 +38,7 @@ def perfil_usuario(request):
       - Transacciones propias en estado 'pendiente'
       - Mis horas (tabla agrupada y detalle inline)
       - Contador de proyectos asignados
+      - Mis tareas (toma asignado_a FK y asignados M2M)
     """
     user = request.user
 
@@ -56,11 +58,7 @@ def perfil_usuario(request):
         .order_by("-fecha", "-id")
     )
 
-    # Agrupado por proyecto/área:
-    # - nombre del grupo (proyecto o "—" si None)
-    # - última fecha cargada (MAX)
-    # - total de horas (SUM) → cuidado con DecimalField
-    # - cantidad de registros
+    # Agrupado por proyecto/área
     mis_horas_grouped = (
         HoraTrabajo.objects
         .filter(usuario=user)
@@ -86,29 +84,22 @@ def perfil_usuario(request):
         .count()
     )
 
-    # Accesos según permisos (ejemplo)
-    accesos = []
-    if user.has_perm("economia.view_transaccion"):
-        accesos.append({
-            "nombre": "Economía",
-            "url": "/economia/",
-            "descripcion": "Gestión de ingresos, gastos y balances.",
-        })
-
+    # === MIS TAREAS ===
     ESTADOS_ACTIVOS = ["todo", "doing", "review"]
-
     tareas_asignadas = (
         Tarea.objects
-        .select_related("proyecto", "asignado_a")
+        .select_related("proyecto")            # FK proyecto
+        .prefetch_related("asignados")         # M2M asignados
         .filter(
-            asignado_a=user,
-            proyecto__is_archivado=False
+            Q(asignado_a=user) | Q(asignados=user),
+            proyecto__is_archivado=False,
         )
-        .filter(estado__in=ESTADOS_ACTIVOS)       # si querés incluir todas, quitá esta línea
+        .filter(estado__in=ESTADOS_ACTIVOS)    # si querés todas, quitá esta línea
         .order_by(
             Case(When(vence_el__isnull=True, then=1), default=0, output_field=IntegerField()),
             "vence_el", "id"
         )
+        .distinct()
     )
 
     return render(
@@ -116,10 +107,16 @@ def perfil_usuario(request):
         "perfil.html",
         {
             "user": user,
-            "accesos": accesos,
+            "accesos": [
+                {
+                    "nombre": "Economía",
+                    "url": "/economia/",
+                    "descripcion": "Gestión de ingresos, gastos y balances.",
+                }
+            ] if request.user.has_perm("economia.view_transaccion") else [],
             "mis_pendientes": mis_pendientes,
-            "mis_horas": mis_horas,                     # detalle inline
-            "mis_horas_grouped": mis_horas_grouped,     # tabla agrupada
+            "mis_horas": mis_horas,
+            "mis_horas_grouped": mis_horas_grouped,
             "proyectos_asignados": proyectos_asignados,
             "tareas_asignadas": tareas_asignadas,
         },

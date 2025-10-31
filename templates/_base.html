@@ -4,7 +4,16 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>{% block title %}Sistema D3S{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <!-- Título fijo de pestaña -->
+  <title>SISTEMA D3S</title>
+
+  <!-- Favicon / ícono de pestaña -->
+  <link rel="icon" type="image/png" href="{% static 'img/fondo.png' %}">
+  <link rel="shortcut icon" href="{% static 'img/fondo.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/fondo.png' %}">
+
   <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
   {% block extra_css %}{% endblock %}
   <style>
@@ -27,29 +36,15 @@
 
     /* ===== Menú de usuario ===== */
     .user-menu{position:relative;display:flex;align-items:center;gap:8px;}
-    .user-name{
-      color:#fff;text-decoration:none;font-weight:700;letter-spacing:.02em;
-      padding:6px 2px;border-radius:4px;/* sin fondo -> que no parezca botón */
-    }
+    .user-name{color:#fff;text-decoration:none;font-weight:700;letter-spacing:.02em;padding:6px 2px;border-radius:4px;}
     .user-name:hover{text-decoration:underline;}
-    .user-caret{
-      background:transparent;border:0;color:#fff;cursor:pointer;line-height:1;
-      font-size:18px; /* flecha un poquito más grande */
-      padding:6px 6px;
-    }
-    .user-dd{
-      position:absolute;right:0;top:100%;min-width:230px;background:#fff;border:1px solid #000000;border-radius:10px;
-      box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px 0;display:none;z-index:2000;animation:fadeIn .15s ease;overflow:hidden;
-    }
+    .user-caret{background:transparent;border:0;color:#fff;cursor:pointer;line-height:1;font-size:18px;padding:6px 6px;}
+    .user-dd{position:absolute;right:0;top:100%;min-width:230px;background:#fff;border:1px solid #000000;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);padding:6px 0;display:none;z-index:2000;animation:fadeIn .15s ease;overflow:hidden;}
     .user-menu.open .user-dd{display:block;}
-
     .user-dd a,.user-dd button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 14px;color:#1e293b;text-decoration:none;border-radius:0;background:transparent;border:0;cursor:pointer;transition:background .15s,color .15s;font-size:14px;}
     .user-dd a:hover,.user-dd button:hover{background:#f1f5f9;color:#0f172a;}
     .user-dd .divider{border-top:1px solid #000000;margin:6px 0;}
-
     @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
-
-    /* Forzar color oscuro dentro del dropdown del usuario (admin css lo blanquea) */
     #user-tools .user-dd a,#user-tools .user-dd a:link,#user-tools .user-dd a:visited{color:#1e293b !important;}
     #user-tools .user-dd a:hover{color:#0f172a !important;}
 
@@ -73,8 +68,8 @@
 <body>
   <div id="container">
     <div id="header" style="display:flex;justify-content:space-between;align-items:center;">
-      <div id="branding">
-        <h1 id="site-name" style="margin:0;">Sistema D3S</h1>
+      <div id="branding" style="display:flex;align-items:center;gap:10px;">
+        <h1 id="site-name" style="margin:0;">SISTEMA D3S</h1>
       </div>
 
       <div id="user-tools" style="display:flex;gap:16px;align-items:center;position:relative;">
@@ -195,7 +190,7 @@
     }
     function openModal(overlay){ overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false'); }
 
-    /* ===== Notificaciones ===== */
+    /* ===== Notificaciones (campana) ===== */
     (function(){
       const btn  = document.getElementById('notifBell');
       const menu = document.getElementById('notifMenu');
@@ -203,6 +198,7 @@
 
       function closeMenu(){ menu.classList.remove('is-open'); btn.setAttribute('aria-expanded','false'); }
       function toggleMenu(e){ e.stopPropagation(); const open = menu.classList.toggle('is-open'); btn.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+
       menu.addEventListener('click', e=>e.stopPropagation());
       btn.addEventListener('click', toggleMenu);
       document.addEventListener('click', (e)=>{ if(!menu.contains(e.target) && e.target !== btn) closeMenu(); });
@@ -220,7 +216,7 @@
       document.addEventListener('click', ()=>menu.classList.remove('open'));
     })();
 
-    /* ===== Cargar contenido de modales por AJAX y manejar submit por fetch ===== */
+    /* ===== Modales de perfil (editar nombre / cambiar contraseña) ===== */
     (function(){
       const editBtn = document.getElementById('openEditName');
       const pwdBtn  = document.getElementById('openChangePwd');
@@ -228,13 +224,12 @@
       const pwdOv   = document.getElementById('modalChangePwd');
       const editCt  = document.getElementById('editNameContainer');
       const pwdCt   = document.getElementById('changePwdContainer');
-      const userNameText = document.getElementById('userNameText');
 
       function wireAjaxForm(container, overlay, afterOk){
         const form = container.querySelector('form');
         if(!form) return;
         form.addEventListener('submit', async function(e){
-          e.preventDefault();                           // ← NO navegar
+          e.preventDefault();
           const fd = new FormData(form);
           const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
           try{
@@ -244,33 +239,26 @@
               body: fd,
               credentials: 'same-origin'
             });
-            // Puede devolver JSON (ok/html) o el partial con errores
             const text = await r.text();
             let data = null;
             try { data = JSON.parse(text); } catch (_){}
 
             if (data && data.ok){
-              // Cerrar modal
               overlay.classList.remove('open');
               overlay.setAttribute('aria-hidden','true');
               if (afterOk) afterOk(data);
               return;
             }
-
-            // Si devolvió el formulario con errores, lo reinyectamos y re-conectamos el handler
             if (!data && text.trim().startsWith('<')){
               container.innerHTML = text;
               wireAjaxForm(container, overlay, afterOk);
               return;
             }
-
-            // Si devolvió JSON con errores y html
             if (data && data.html){
               container.innerHTML = data.html;
               wireAjaxForm(container, overlay, afterOk);
               return;
             }
-
             alert('No se pudo guardar. Intentá de nuevo.');
           }catch(err){
             console.error(err);
@@ -279,38 +267,24 @@
         });
       }
 
-      // Abrir modal "Cambiar nombre"
       if (editBtn){
         editBtn.addEventListener('click', ()=>{
           openModal(editOv);
           editCt.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
           fetch("{% url 'perfil_editar_modal' %}", { headers:{'X-Requested-With':'XMLHttpRequest'} })
             .then(r=>r.text())
-            .then(html=>{
-              editCt.innerHTML = html;
-              wireAjaxForm(editCt, editOv, (data)=>{
-                // Actualizar el nombre mostrado si el backend lo envía
-                if (data.name && userNameText) userNameText.textContent = data.name;
-              });
-            })
+            .then(html=>{ editCt.innerHTML = html; wireAjaxForm(editCt, editOv, ()=>{}); })
             .catch(()=> editCt.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
         });
       }
 
-      // Abrir modal "Cambiar contraseña"
       if (pwdBtn){
         pwdBtn.addEventListener('click', ()=>{
           openModal(pwdOv);
           pwdCt.innerHTML = '<p style="margin:0;color:#666">Cargando…</p>';
           fetch("{% url 'password_change_modal' %}", { headers:{'X-Requested-With':'XMLHttpRequest'} })
             .then(r=>r.text())
-            .then(html=>{
-              pwdCt.innerHTML = html;
-              wireAjaxForm(pwdCt, pwdOv, ()=>{
-                // Opcional: mostrar un toast/simple alert
-                alert('Contraseña actualizada.');
-              });
-            })
+            .then(html=>{ pwdCt.innerHTML = html; wireAjaxForm(pwdCt, pwdOv, ()=>{ alert('Contraseña actualizada.'); }); })
             .catch(()=> pwdCt.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
         });
       }

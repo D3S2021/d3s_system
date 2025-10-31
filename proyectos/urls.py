@@ -21,6 +21,8 @@ urlpatterns = [
     path("<int:pk>/cerrar/", views.proyecto_cerrar, name="cerrar"),
     path("<int:pk>/reabrir/", views.proyecto_reabrir, name="reabrir"),
     path("proyecto/<int:pk>/estado/", views.proyecto_cambiar_estado, name="proyecto_cambiar_estado"),
+    path("tareas/<int:pk>/tomar/", views.tomar_tarea, name="tarea_tomar"),
+
     # API para duplicar:
     path("api/<int:pk>/", views.proyecto_api_json, name="api_proyecto"),
 

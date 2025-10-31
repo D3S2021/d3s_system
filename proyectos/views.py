@@ -545,7 +545,45 @@ def _exclude_admin(form):
         qs = form.fields["asignados"].queryset
         form.fields["asignados"].queryset = qs.exclude(username__iexact="admin")
 
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 
+from .models import Tarea
+
+@login_required
+def tomar_tarea(request, pk):
+    """
+    Permite a un usuario 'quedarse' con una tarea que está asignada a múltiples personas.
+    Requisitos:
+      - el usuario debe estar entre los asignados
+      - la tarea debe tener más de un asignado
+      - POST únicamente
+    Efecto:
+      - deja como único asignado al usuario actual
+    """
+    if request.method != "POST":
+        return redirect(request.META.get("HTTP_REFERER") or reverse("perfil"))
+
+    tarea = get_object_or_404(Tarea, pk=pk)
+    # si no usás 'asignados' M2M, reemplazá por el nombre que tengas
+    if not tarea.asignados.filter(pk=request.user.pk).exists():
+        messages.error(request, "No estás asignado a esta tarea.")
+        return redirect(request.POST.get("next") or reverse("perfil"))
+
+    if tarea.asignados.count() <= 1:
+        messages.info(request, "La tarea ya está tomada por una sola persona.")
+        return redirect(request.POST.get("next") or reverse("perfil"))
+
+    # dejar solo al usuario actual
+    tarea.asignados.set([request.user])
+    tarea.save(update_fields=[])  # no hace falta campos; mantiene updated_at si tenés auto_now
+    messages.success(request, "Tomaste la tarea. Ahora sos el único asignado.")
+    return redirect(request.POST.get("next") or reverse("perfil"))
+
+
+# ========= CREAR TAREA =========
 @login_required
 def tarea_crear(request, proyecto_id):
     proyecto = get_object_or_404(_qs_permitidos(request), pk=proyecto_id)
@@ -575,11 +613,10 @@ def tarea_crear(request, proyecto_id):
             t.proyecto = proyecto
             t.creado_por = request.user
             t.save()
-            form.save_m2m()  # ← necesario para 'asignados'
+            form.save_m2m()  # ← imprescindible para 'asignados' (M2M)
 
-            # Notificación / historial
+            # Notificaciones a asignados (excepto quien crea)
             if Notificacion:
-                # Notificar a todos los asignados excepto quien crea
                 if hasattr(t, "asignados"):
                     for u in t.asignados.exclude(id=request.user.id):
                         Notificacion.objects.create(
@@ -588,8 +625,8 @@ def tarea_crear(request, proyecto_id):
                             cuerpo=f"{t.titulo}",
                             url=reverse("proyectos:tarea_open", args=[t.id]),
                         )
-                # (compat) si existiera el FK antiguo y no hay M2M:
                 elif getattr(t, "asignado_a_id", None) and t.asignado_a_id != request.user.id:
+                    # Compat FK antiguo si existiera
                     Notificacion.objects.create(
                         user=t.asignado_a,
                         titulo=f"Nueva tarea en {proyecto.nombre}",
@@ -609,7 +646,7 @@ def tarea_crear(request, proyecto_id):
             messages.success(request, "Tarea creada.")
             return redirect("proyectos:detalle", pk=proyecto.id)
 
-        # inválido → devolvemos el partial con errores si es AJAX
+        # inválido → partial con errores si es AJAX
         if is_ajax:
             html = render_to_string(
                 "proyectos/_tarea_form.html",
@@ -690,6 +727,7 @@ def tarea_chat_enviar(request, pk: int):
     return response
 
 
+# ========= EDITAR TAREA =========
 @login_required
 def tarea_editar(request, pk):
     """
@@ -717,6 +755,8 @@ def tarea_editar(request, pk):
     # POST (guardar)
     if request.method == "POST":
         is_ajax = _is_ajax(request)
+
+        # Para detectar nuevos asignados (M2M)
         antes_ids = set()
         if hasattr(tarea, "asignados"):
             antes_ids = set(tarea.asignados.values_list("id", flat=True))
@@ -725,9 +765,9 @@ def tarea_editar(request, pk):
         _exclude_admin(form)
         if form.is_valid():
             antes_estado = tarea.estado
-            t = form.save()  # ModelForm guarda M2M al tener instance
+            t = form.save()  # commit=True → Django guarda M2M automáticamente
 
-            # Notificar a los NUEVOS asignados
+            # Notificar a los NUEVOS asignados (M2M)
             if Notificacion and hasattr(t, "asignados"):
                 despues_ids = set(t.asignados.values_list("id", flat=True))
                 nuevos = despues_ids - antes_ids
@@ -740,10 +780,13 @@ def tarea_editar(request, pk):
                             url=reverse("proyectos:tarea_open", args=[t.id]),
                         )
 
+            # Historial por cambio de estado
             if antes_estado != t.estado:
                 HistorialProyecto.objects.create(
-                    proyecto=t.proyecto, tipo="estado_tarea", actor=request.user,
-                    descripcion=f"Cambio de estado: '{t.titulo}' {antes_estado} → {t.estado}."
+                    proyecto=t.proyecto,
+                    tipo="estado_tarea",
+                    actor=request.user,
+                    descripcion=f"Cambio de estado: '{t.titulo}' {antes_estado} → {t.estado}.",
                 )
 
             if is_ajax:
