@@ -196,11 +196,18 @@ class ProyectoForm(forms.ModelForm):
 # ===========================
 # FORMULARIO DE TAREA
 # ===========================
+# proyectos/forms.py
+from django import forms
+from django.contrib.auth import get_user_model
+from .models import Tarea
+
+User = get_user_model()
+
 class TareaForm(forms.ModelForm):
     asignados = forms.ModelMultipleChoiceField(
         label="Asignado a",
         required=False,
-        queryset=User.objects.filter(is_active=True).exclude(username__iexact="admin"),
+        queryset=User.objects.none(),  # <-- se setea en __init__
         widget=forms.SelectMultiple(attrs={
             "class": "form-select",
             "style": "min-height: 80px;",
@@ -214,7 +221,7 @@ class TareaForm(forms.ModelForm):
             "descripcion",
             "estado",
             "prioridad",
-            "asignados",  # <--- reemplaza asignado_a
+            "asignados",
             "vence_el",
             "estimacion_horas",
         ]
@@ -224,10 +231,27 @@ class TareaForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        # ⬅️ clave: recibimos el proyecto explícitamente o lo tomamos de la instancia
+        proyecto = kwargs.pop("proyecto", None)
         super().__init__(*args, **kwargs)
-        # Quitar usuario admin del selector
-        if "asignados" in self.fields:
-            self.fields["asignados"].queryset = self.fields["asignados"].queryset.exclude(username__iexact="admin")
+
+        if proyecto is None:
+            proyecto = getattr(self.instance, "proyecto", None)
+
+        qs = User.objects.none()
+        if proyecto is not None:
+            # miembros + responsable (si existe), todos activos; sin 'admin'
+            member_ids = list(proyecto.miembros.values_list("id", flat=True))
+            if getattr(proyecto, "responsable_id", None):
+                member_ids.append(proyecto.responsable_id)
+
+            qs = (User.objects
+                    .filter(is_active=True, id__in=set(member_ids))
+                    .exclude(username__iexact="admin")
+                    .order_by("first_name", "last_name", "username"))
+
+        self.fields["asignados"].queryset = qs
+        self.fields["asignados"].help_text = ""
 
 
 # ===========================

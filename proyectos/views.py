@@ -287,7 +287,7 @@ def proyecto_detalle(request, pk):
             "estados": estados,
             "cols": cols,
             "hoy": now().date(),
-            "form_tarea": TareaForm(),
+            "form_tarea": TareaForm(proyecto=proyecto),
             "form_comentario": ComentarioForm(),
             "form_adjunto": AdjuntoForm(),
             "estados_proyecto": Proyecto.ESTADOS,
@@ -630,7 +630,7 @@ def tarea_crear(request, proyecto_id):
     is_ajax = (request.headers.get("x-requested-with") or "").lower() == "xmlhttprequest"
 
     if request.method == "GET" and request.GET.get("modal") == "1":
-        form = TareaForm()
+        form = TareaForm(proyecto=proyecto)
         _exclude_admin(form)
         html = render_to_string(
             "proyectos/_tarea_form.html",
@@ -644,7 +644,7 @@ def tarea_crear(request, proyecto_id):
         return HttpResponse(html)
 
     if request.method == "POST":
-        form = TareaForm(request.POST)
+        form = TareaForm(request.POST, proyecto=proyecto)
         _exclude_admin(form)
         if form.is_valid():
             t = form.save(commit=False)
@@ -781,7 +781,7 @@ def tarea_editar(request, pk):
         return html
 
     if request.method == "GET" and request.GET.get("modal") == "1":
-        form = TareaForm(instance=tarea)
+        form = TareaForm(instance=tarea, proyecto=tarea.proyecto)
         _exclude_admin(form)
         return HttpResponse(_render(form))
 
@@ -792,7 +792,7 @@ def tarea_editar(request, pk):
         if hasattr(tarea, "asignados"):
             antes_ids = set(tarea.asignados.values_list("id", flat=True))
 
-        form = TareaForm(request.POST, instance=tarea)
+        form = TareaForm(request.POST, instance=tarea, proyecto=tarea.proyecto)
         _exclude_admin(form)
         if form.is_valid():
             antes_estado = tarea.estado
