@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Categoria, Transaccion
+from .models import Categoria, Transaccion, PlanMensual
+
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
@@ -10,9 +11,19 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Transaccion)
 class TransaccionAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "categoria", "monto", "estado", "usuario", "validado_por")
-    list_filter = ("estado", "categoria__tipo")
-    search_fields = ("descripcion", "usuario__username")
+    list_display = (
+        "fecha",
+        "categoria",
+        "monto",
+        "estado",
+        "usuario",
+        "validado_por",
+        "proyecto",  # 👈 agregado
+        "es_efectivo",
+    )
+    list_filter = ("estado", "categoria__tipo", "categoria", "proyecto","es_efectivo")
+    search_fields = ("descripcion", "usuario__username", "categoria__nombre")
+    autocomplete_fields = ("categoria", "usuario", "validado_por", "proyecto")
 
     # 🔒 No permitir agregar nuevas transacciones desde el admin
     def has_add_permission(self, request):
@@ -24,3 +35,10 @@ class TransaccionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return True
+
+
+@admin.register(PlanMensual)
+class PlanMensualAdmin(admin.ModelAdmin):
+    list_display = ("year", "month", "categoria", "monto_esperado", "actualizado_en")
+    list_filter = ("year", "month", "categoria")
+    search_fields = ("categoria__nombre",)

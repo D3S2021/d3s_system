@@ -1,11 +1,19 @@
 {# templates/economia/_form_transaccion.html #}
-<form method="post" action="{% url 'economia:nuevo' %}">
+<form method="post" action="{% url 'economia:nuevo' %}" enctype="multipart/form-data">
   {% csrf_token %}
+  {% if tx %}<input type="hidden" name="tx_id" value="{{ tx.id }}">{% endif %}
 
+
+  {# Mostrar categoría SOLO si el campo NO es hidden #}
+  {% if not form.categoria.is_hidden %}
   <p>
     {{ form.categoria.label_tag }}
     {{ form.categoria }}
   </p>
+  {% else %}
+    {# Aún así, incluimos el input hidden para enviar su valor si lo hubiera #}
+    {{ form.categoria }}
+  {% endif %}
 
   <p>
     {{ form.fecha.label_tag }}
@@ -39,12 +47,10 @@
       placeholder="$ 0,00"
       value="{{ form.monto.value|default:'' }}"
       onfocus="(function(el){
-        // Al enfocar, quitar símbolos/espacios para editar el número crudo
         var v = el.value || '';
         el.value = v.replace(/[^0-9,.-]/g,'');
       })(this)"
       onblur="(function(el){
-        // Al salir, mostrar como moneda ARS
         var v = (el.value||'').trim();
         if(!v){ el.value=''; return; }
         var n = parseFloat(v.replace(/\./g,'').replace(',','.'));
@@ -62,12 +68,22 @@
     {{ form.descripcion }}
   </p>
 
+  {# === Comprobante (PDF/imagen) === #}
+  <p>
+    {{ form.comprobante.label_tag }}
+    {{ form.comprobante }}
+  </p>
+  {% if form.comprobante.help_text %}
+    <p style="margin:.25rem 0 0;color:#64748b;font-size:.9rem">
+      {{ form.comprobante.help_text }}
+    </p>
+  {% endif %}
+
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
     <button
       type="submit"
       class="btn btn-success"
       onclick="(function(btn){
-        // Antes de enviar, normalizar monto a número simple (1234.56)
         var form = btn.closest('form');
         var el = form && form.querySelector('#id_monto');
         if(!el) return;

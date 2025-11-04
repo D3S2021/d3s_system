@@ -23,7 +23,7 @@
     .notif-btn{appearance:none;border:0;background:transparent;cursor:pointer;font-size:18px;line-height:1;position:relative;color:#fff;}
     .notif-dropdown{display:none;position:absolute;top:24px;right:0;width:320px;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.2);z-index:2000;color:#2c3e50;}
     .notif-dropdown.is-open{display:block;}
-    .notif-dropdown header{font-weight:600;padding:10px 12px;border-bottom:1px solid #eee;background:#f8f9fa;border-radius:8px 8px 0 0;color:#333;}
+    .notif-dropdown header{display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:600;padding:10px 12px;border-bottom:1px solid #eee;background:#f8f9fa;border-radius:8px 8px 0 0;color:#333;}
     .notif-dropdown ul{list-style:none;margin:0;padding:0;max-height:320px;overflow-y:auto;}
     .notif-dropdown li{padding:10px 12px;border-bottom:1px solid #f1f1f1;font-size:13px;color:#2c3e50;}
     .notif-dropdown li:last-child{border-bottom:none;}
@@ -33,6 +33,9 @@
     .notif-dropdown .footer{display:flex;justify-content:center;padding:10px 12px;border-top:1px solid #eee;background:#fafafa;border-radius:0 0 8px 8px;}
     .notif-dropdown .footer a{font-size:13px;font-weight:600;color:#2c7be5 !important;text-decoration:none !important;}
     .notif-dropdown .footer a:hover{text-decoration:underline !important;color:#1b5cb8 !important;}
+    .notif-actions .icon-btn{border:1px solid #d0d7de;background:#fff;border-radius:10px;padding:4px 8px;cursor:pointer;line-height:1;}
+    .notif-actions .icon-btn:hover{background:#eef2ff;border-color:#c7d2fe}
+    .notif-actions .check{font-weight:900;color:#16a34a}
 
     /* ===== Menú de usuario ===== */
     .user-menu{position:relative;display:flex;align-items:center;gap:8px;}
@@ -84,8 +87,15 @@
             </button>
 
             <div class="notif-dropdown" id="notifMenu" role="menu" aria-label="Notificaciones">
-              <header>Notificaciones</header>
-              <ul>
+              <header>
+                <span>Notificaciones</span>
+                <div class="notif-actions">
+                  <button id="btnMarkAllRead" class="icon-btn" title="Marcar todas como leídas" aria-label="Marcar todas como leídas">
+                    <span class="check">✓</span>
+                  </button>
+                </div>
+              </header>
+              <ul id="notifList">
                 {% if noti_unread %}
                   {% for n in noti_unread|slice:":10" %}
                     <li>
@@ -203,6 +213,33 @@
       btn.addEventListener('click', toggleMenu);
       document.addEventListener('click', (e)=>{ if(!menu.contains(e.target) && e.target !== btn) closeMenu(); });
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeMenu(); });
+
+      // Marcar todas como leídas (sin toast)
+      const markAllBtn = document.getElementById('btnMarkAllRead');
+      const badge = document.querySelector('.notif-badge');
+      const list  = document.getElementById('notifList');
+
+      if (markAllBtn){
+        markAllBtn.addEventListener('click', async function(){
+          try{
+            const r = await fetch("{% url 'notificaciones:api_marcar_todas' %}", {
+              method: 'POST',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCookie('csrftoken')
+              },
+              credentials: 'same-origin'
+            });
+            const data = await r.json();
+            if (data && data.ok){
+              if (badge) badge.remove();
+              if (list) list.innerHTML = '<li><em>No tenés notificaciones nuevas</em></li>';
+            }
+          }catch(err){
+            console.error(err);
+          }
+        });
+      }
     })();
 
     /* ===== Menú Usuario (solo con la flecha) ===== */

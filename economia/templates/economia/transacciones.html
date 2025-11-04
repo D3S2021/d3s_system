@@ -3,7 +3,6 @@
 
 {% block content_adminlike %}
 
-
 <div class="cols" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
 
   <!-- GASTOS -->
@@ -16,6 +15,7 @@
           <th>Importe</th>
           <th>Descripción</th>
           <th>Categoría</th>
+          <th>Comprobante</th>
           <th>Usuario</th>
           {% if perms.economia.can_validate_transactions %}
             <th>Acciones</th>
@@ -29,11 +29,30 @@
           <td>${{ t.monto }}</td>
           <td>{{ t.descripcion }}</td>
           <td>{{ t.categoria.nombre|default:"-" }}</td>
+
+          <td>
+            {% if t.comprobante %}
+              <a href="{{ t.comprobante.url }}" target="_blank">Ver</a>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+
           <td>{{ t.usuario.username|default:"-" }}</td>
+
           {% if perms.economia.can_validate_transactions %}
             <td>
-              <a href="{% url 'economia:tx_editar' t.id %}">Editar</a> |
-              <a href="#" onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">Eliminar</a>
+              <a href="#"
+                 class="js-edit-tx"
+                 data-pk="{{ t.id }}"
+                 >
+                 Editar
+              </a>
+              |
+              <a href="#"
+                 onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">
+                 Eliminar
+              </a>
               <form id="del-form-{{ t.id }}" method="post" action="{% url 'economia:tx_eliminar' t.id %}" style="display:none;">
                 {% csrf_token %}
               </form>
@@ -41,7 +60,7 @@
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="{% if perms.economia.can_validate_transactions %}6{% else %}5{% endif %}">Sin gastos aprobados.</td></tr>
+        <tr><td colspan="{% if perms.economia.can_validate_transactions %}7{% else %}6{% endif %}">Sin gastos aprobados.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -57,6 +76,7 @@
           <th>Importe</th>
           <th>Descripción</th>
           <th>Categoría</th>
+          <th>Comprobante</th>
           <th>Usuario</th>
           {% if perms.economia.can_validate_transactions %}
             <th>Acciones</th>
@@ -70,11 +90,30 @@
           <td>${{ t.monto }}</td>
           <td>{{ t.descripcion }}</td>
           <td>{{ t.categoria.nombre|default:"-" }}</td>
+
+          <td>
+            {% if t.comprobante %}
+              <a href="{{ t.comprobante.url }}" target="_blank">Ver</a>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+
           <td>{{ t.usuario.username|default:"-" }}</td>
+
           {% if perms.economia.can_validate_transactions %}
             <td>
-              <a href="{% url 'economia:tx_editar' t.id %}">Editar</a> |
-              <a href="#" onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">Eliminar</a>
+              <a href="#"
+                 class="js-edit-tx"
+                 data-pk="{{ t.id }}"
+                 >
+                 Editar
+              </a>
+              |
+              <a href="#"
+                 onclick="event.preventDefault(); if(confirm('¿Eliminar transacción?')) document.getElementById('del-form-{{ t.id }}').submit();">
+                 Eliminar
+              </a>
               <form id="del-form-{{ t.id }}" method="post" action="{% url 'economia:tx_eliminar' t.id %}" style="display:none;">
                 {% csrf_token %}
               </form>
@@ -82,11 +121,122 @@
           {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="{% if perms.economia.can_validate_transactions %}6{% else %}5{% endif %}">Sin ingresos aprobados.</td></tr>
+        <tr><td colspan="{% if perms.economia.can_validate_transactions %}7{% else %}6{% endif %}">Sin ingresos aprobados.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </section>
 
 </div>
+
+{# ===== Modal reutilizable para crear/editar transacción ===== #}
+<div class="modal-overlay" id="modalTransacciones" aria-hidden="true" style="position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTxTitle"
+       style="width:min(900px,92vw);max-height:88vh;overflow:auto;background:#fff;border-radius:10px;box-shadow:0 10px 35px rgba(0,0,0,.25);">
+    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;">
+      <h3 class="modal-title" id="modalTxTitle" style="margin:0;font-size:18px;font-weight:700;">Editar transacción</h3>
+      <button type="button" class="btn-close" id="closeModalTx" aria-label="Cerrar" style="border:none;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div class="modal-body" id="modalTxBody" style="padding:14px 16px;">
+      <p style="margin:0;color:#666">Cargando formulario…</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const overlay = document.getElementById('modalTransacciones');
+  const body    = document.getElementById('modalTxBody');
+  const btnClose= document.getElementById('closeModalTx');
+  const URL_FORM= "{% url 'economia:nuevo' %}"; // vista unificada (crear/editar)
+
+  function getCookie(name){
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+
+  function openModal(){ overlay.style.display = 'flex'; overlay.setAttribute('aria-hidden','false'); }
+  function closeModal(){ overlay.style.display = 'none'; overlay.setAttribute('aria-hidden','true'); }
+
+  // Abrir modal en modo edición
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.js-edit-tx');
+    if(!btn) return;
+
+    const pk = btn.getAttribute('data-pk');
+    if(!pk) return;
+
+    body.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
+    openModal();
+
+    const url = URL_FORM + '?modal=1&pk=' + encodeURIComponent(pk);
+    fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' }, cache: 'no-store' })
+      .then(r => r.text())
+      .then(html => {
+        body.innerHTML = html;
+        attachFormHandler(); // hook de envío AJAX
+      })
+      .catch(() => {
+        body.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>';
+      });
+  });
+
+  btnClose.addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+  // Enviar el form del modal por AJAX para no salir de esta página
+  function attachFormHandler(){
+    const form = body.querySelector('form');
+    if(!form) return;
+
+    form.addEventListener('submit', async function(ev){
+      ev.preventDefault();
+
+      const fd = new FormData(form);
+      fd.set('modal', '1'); // para que la vista responda JSON
+      const hasTxId = Array.from(fd.keys()).includes('tx_id');
+      if(!hasTxId){
+        const qs = new URLSearchParams((form.action || URL_FORM).split('?')[1] || '');
+        const pk = qs.get('pk');
+        if(pk) fd.set('tx_id', pk);
+      }
+
+      try{
+        const r = await fetch(form.action || URL_FORM, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCookie('csrftoken')
+          },
+          body: fd
+        });
+
+        const text = await r.text();
+        try{
+          const data = JSON.parse(text);
+          if(data && data.ok){
+            closeModal();
+            location.reload();
+            return;
+          }
+        }catch(_){}
+
+        if (text.trim().startsWith('<')) {
+          body.innerHTML = text;
+          attachFormHandler();
+          return;
+        }
+
+        alert('No se pudo guardar la transacción.');
+      }catch(err){
+        console.error(err);
+        alert('Error de red.');
+      }
+    });
+  }
+})();
+</script>
+
 {% endblock %}

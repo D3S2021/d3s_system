@@ -2,9 +2,26 @@
 {% block title %}Resumen de Economía{% endblock %}
 
 {% block content_adminlike %}
-<h1>{{ month }}/{{ year|stringformat:"s" }}</h1>
 
-<div class="cards">
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+  <h1 style="margin:0">Resumen · {{ month }}/{{ year }}</h1>
+
+  <div style="margin-left:auto">
+    <form method="get" style="display:flex; align-items:center; gap:8px; margin:0;">
+      <label>Mes:</label>
+      <select name="month">
+        {% for m in months %}
+          <option value="{{ m }}" {% if month == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <label>Año:</label>
+      <input type="number" name="year" value="{{ year }}" style="width:96px">
+      <button type="submit" class="default">Ver</button>
+    </form>
+  </div>
+</div>
+
+<div class="cards" style="grid-template-columns:repeat(2,minmax(200px,1fr));">
   <div class="card">
     <div class="k">Ingresos</div>
     <div class="number">${{ total_ingresos }}</div>
@@ -13,29 +30,72 @@
     <div class="k">Gastos</div>
     <div class="number">${{ total_gastos }}</div>
   </div>
-  <div class="card">
-    <div class="k">Saldo</div>
-    <div class="number">${{ saldo }}</div>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 340px; gap:16px; margin-top:16px;">
+  <!-- Últimas transacciones -->
+  <div>
+    <h3 style="margin:0 0 8px">Últimas transacciones aprobadas</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Usuario</th>
+          <th>Categoría</th>
+          <th>Tipo</th>
+          <th style="text-align:right">Monto</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in ultimas %}
+        <tr>
+          <td>{{ t.fecha|date:"d/m/Y" }}</td>
+          <td>{{ t.usuario.username|default:"-" }}</td>
+          <td>{{ t.categoria.nombre }}</td>
+          <td style="text-transform:capitalize">{{ t.categoria.tipo }}</td>
+          <td style="text-align:right">${{ t.monto }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">Sin movimientos</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Top categorías -->
+  <div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="k">Top categorías · Gastos</div>
+      <table>
+        <tbody>
+        {% for c in top_gastos %}
+          <tr>
+            <td>{{ c.nombre }}</td>
+            <td style="text-align:right">${{ c.total }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2">—</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="k">Top categorías · Ingresos</div>
+      <table>
+        <tbody>
+        {% for c in top_ingresos %}
+          <tr>
+            <td>{{ c.nombre }}</td>
+            <td style="text-align:right">${{ c.total }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="2">—</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<h3>Últimas transacciones aprobadas</h3>
-<table>
-  <thead>
-    <tr><th>Fecha</th><th>Usuario</th><th>Categoría</th><th>Tipo</th><th>Monto</th></tr>
-  </thead>
-  <tbody>
-  {% for t in ultimas %}
-    <tr>
-      <td>{{ t.fecha }}</td>
-      <td>{{ t.usuario.username|default:"-" }}</td>
-      <td>{{ t.categoria.nombre }}</td>
-      <td>{{ t.categoria.tipo }}</td>
-      <td>${{ t.monto }}</td>
-    </tr>
-  {% empty %}
-    <tr><td colspan="5">Sin movimientos</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

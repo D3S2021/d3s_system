@@ -1,5 +1,4 @@
 {% extends "economia/_base_adminlike.html" %}
-{# economia/pendientes.html #}
 {% block title %}Transacciones pendientes{% endblock %}
 
 {% block content_adminlike %}
@@ -18,201 +17,352 @@
       <th>Fecha</th>
       <th>Usuario</th>
       <th>Descripción</th>
-      <th>Importe</th>
-      <th>Categoría (al aprobar)</th>
-      <th>Acciones</th>
+      <th class="num">Importe</th>
+      <th>Comprobante</th>
+      <th>Proyecto (opcional)</th>
+      <th class="th-efectivo">Efectivo</th>
+      <th>Categoría</th>
+      <th class="th-acciones">Acciones</th>
     </tr>
   </thead>
+
   <tbody>
   {% for t in pendientes %}
-    <tr>
+    <tr class="js-row">
       <td>{{ t.fecha|date:"d/m/Y" }}</td>
       <td>{{ t.usuario.username|default:"-" }}</td>
       <td>{{ t.descripcion }}</td>
-      <td>${{ t.monto }}</td>
+      <td class="num">${{ t.monto }}</td>
+
+      <!-- Comprobante -->
       <td>
-        <form method="post" action="{% url 'economia:pendientes' %}" style="display:flex; gap:8px; align-items:center">
+        {% if t.comprobante %}
+          <a href="{{ t.comprobante.url }}" target="_blank" rel="noopener">Ver</a>
+        {% else %}—{% endif %}
+      </td>
+
+      <!-- Proyecto (opcional) -->
+      <td>
+        <select class="js-proyecto" title="Proyecto (opcional)">
+          <option value="">— Sin proyecto —</option>
+          {% for p in proyectos %}
+            <option value="{{ p.id }}">{{ p.nombre }}</option>
+          {% endfor %}
+        </select>
+      </td>
+
+      <!-- Efectivo (columna angosta y centrada) -->
+      <td class="td-efectivo">
+        <input type="checkbox" class="js-efectivo" {% if t.es_efectivo %}checked{% endif %}>
+      </td>
+
+      <!-- CATEGORÍA (select visible) -->
+      <td class="td-categoria">
+        <select
+          title="Categoría al aprobar"
+          oninput="(function(s){var h=document.getElementById('cat-{{ t.id }}'); if(h){h.value=s.value}})(this)"
+        >
+          <option value="">— Elegí categoría —</option>
+          <optgroup label="Ingresos">
+            {% for c in categorias_ingreso %}
+              <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+            {% endfor %}
+          </optgroup>
+          <optgroup label="Gastos">
+            {% for c in categorias_gasto %}
+              <option value="{{ c.id }}" {% if t.categoria_id == c.id %}selected{% endif %}>{{ c.nombre }}</option>
+            {% endfor %}
+          </optgroup>
+        </select>
+      </td>
+
+      <!-- ACCIONES (solo botones, centrados) -->
+      <td class="td-acciones" style="white-space:nowrap">
+        <form id="f{{ t.id }}" method="post" action="{% url 'economia:pendientes' %}" class="js-form-row">
           {% csrf_token %}
           <input type="hidden" name="tx_id" value="{{ t.id }}">
-
-          {# Selector de categoría (muestra INGRESOS y GASTOS) #}
-          <select name="categoria_id" title="Categoría al aprobar">
+          <input type="hidden" name="proyecto_id" value="">
+          <input type="hidden" name="efectivo" value="">
+          <input type="hidden" name="comentario" value="">
+          <!-- Select oculto que usa el backend/JS; se sincroniza desde la columna Categoría -->
+          <select id="cat-{{ t.id }}" name="categoria_id" required style="display:none">
             <option value="">— Elegí categoría —</option>
-
-            <optgroup label="Ingresos">
-              {% for c in categorias_ingreso %}
-                <option value="{{ c.id }}"
-                        {% if t.categoria_id == c.id %}selected{% endif %}>
-                  {{ c.nombre }}
-                </option>
-              {% endfor %}
-            </optgroup>
-
-            <optgroup label="Gastos">
-              {% for c in categorias_gasto %}
-                <option value="{{ c.id }}"
-                        {% if t.categoria_id == c.id %}selected{% endif %}>
-                  {{ c.nombre }}
-                </option>
-              {% endfor %}
-            </optgroup>
+            {% for c in categorias_ingreso %}<option value="{{ c.id }}"></option>{% endfor %}
+            {% for c in categorias_gasto %}<option value="{{ c.id }}"></option>{% endfor %}
           </select>
-      </td>
-      <td style="white-space:nowrap">
-          <button type="submit" name="accion" value="aprobar" class="btn-aprobar">Aprobar</button>
 
-          {# Comentario para rechazo #}
-          <input type="text" name="comentario" placeholder="Motivo del rechazo" style="width:220px;">
-          <button type="submit" name="accion" value="rechazar" class="btn-rechazar">Rechazar</button>
+          <div style="display:flex;justify-content:center;gap:8px;">
+            <button type="submit" name="accion" value="aprobar" class="btn-aprobar">Aprobar</button>
+            <button type="button" class="btn-rechazar js-open-rechazo">Rechazar</button>
+          </div>
         </form>
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="6">No hay pendientes.</td></tr>
+    <tr><td colspan="9">No hay pendientes.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 
+
+<!-- ===== Modal Rechazo ===== -->
+<div id="rechazoOverlay" class="rj-overlay" aria-hidden="true" style="display:none">
+  <div class="rj-modal" role="dialog" aria-modal="true" aria-labelledby="rjTitle">
+    <div class="rj-header">
+      <h3 id="rjTitle" style="margin:0">Rechazar transacción</h3>
+      <button type="button" class="rj-close" aria-label="Cerrar">×</button>
+    </div>
+    <div class="rj-body">
+      <label for="rjTextarea" style="font-weight:700;display:block;margin-bottom:6px;">Motivo del rechazo</label>
+      <textarea id="rjTextarea" rows="4" placeholder="Escribí el motivo…" style="width:100%;resize:vertical;border:1px solid #cbd5e1;border-radius:10px;padding:10px 12px;"></textarea>
+      <p id="rjWarn" style="color:#b91c1c;margin:8px 0 0;display:none">El motivo es obligatorio.</p>
+    </div>
+    <div class="rj-footer">
+      <button type="button" class="rj-btn" id="rjCancel">Cancelar</button>
+      <button type="button" class="rj-btn rj-primary" id="rjConfirm">Rechazar</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  // Hace obligatorio el comentario SOLO cuando se presiona "Rechazar"
-  document.querySelectorAll('form').forEach(function(f){
-    const rechBtn = f.querySelector('.btn-rechazar');
-    const com = f.querySelector('input[name="comentario"]');
-    if (rechBtn && com) {
-      rechBtn.addEventListener('click', function(){
-        com.setAttribute('required', 'required');
-      });
-    }
-    // Hace obligatorio elegir categoría SOLO cuando se presiona "Aprobar"
-    const aprBtn = f.querySelector('.btn-aprobar');
-    const sel = f.querySelector('select[name="categoria_id"]');
-    if (aprBtn && sel) {
-      aprBtn.addEventListener('click', function(){
-        sel.setAttribute('required', 'required');
+  // ===== Sincronizar proyecto y efectivo -> hidden en envíos individuales =====
+  document.querySelectorAll('tbody tr.js-row').forEach(function(tr){
+    const selProyecto     = tr.querySelector('.js-proyecto');
+    const chkEfectivo     = tr.querySelector('.js-efectivo');
+    const form            = tr.querySelector('form.js-form-row');
+    const hiddenProyecto  = form ? form.querySelector('input[name="proyecto_id"]') : null;
+    const hiddenEfectivo  = form ? form.querySelector('input[name="efectivo"]') : null;
+
+    if (form){
+      form.addEventListener('submit', function(){
+        if (hiddenProyecto) hiddenProyecto.value = selProyecto?.value || '';
+        if (hiddenEfectivo) hiddenEfectivo.value = (chkEfectivo && chkEfectivo.checked) ? '1' : '';
       });
     }
   });
-</script>
 
-<!-- ===== NUEVO: Toast minimal ===== -->
-<style>
-  .toast {
-    position: fixed; top: 18px; right: 18px; z-index: 3000;
-    background: #0f172a; color: #fff; border-radius: 8px;
-    padding: 10px 14px; box-shadow: 0 10px 25px rgba(0,0,0,.2);
-    opacity: 0; transform: translateY(-8px); transition: opacity .2s, transform .2s;
-    font-weight: 600; font-size: 14px;
-  }
-  .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.ok { background:#14532d; }
-  .toast.warn { background:#b45309; }
-  .toast.err { background:#7f1d1d; }
-</style>
-<div id="toast" class="toast" aria-live="polite" aria-atomic="true" role="status"></div>
-<script>
-(function(){
-  function getCookie(name){
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
-  }
-  function toast(msg, type='ok', ms=2200){
-    const t = document.getElementById('toast');
-    if(!t) return;
-    t.className = 'toast ' + type;
-    t.textContent = msg;
-    requestAnimationFrame(()=> t.classList.add('show'));
-    setTimeout(()=> t.classList.remove('show'), ms);
-  }
-  function markError(el, on){
-    if(!el) return;
-    el.style.outline = on ? '2px solid #dc2626' : '';
-    el.style.borderColor = on ? '#dc2626' : '';
-    el.style.backgroundColor = on ? '#fff1f2' : '';
-  }
+  // ===== Modal Rechazo (AJAX) =====
+  (function(){
+    const ov = document.getElementById('rechazoOverlay');
+    const txt = document.getElementById('rjTextarea');
+    const warn = document.getElementById('rjWarn');
+    const btnClose = ov.querySelector('.rj-close');
+    const btnCancel = document.getElementById('rjCancel');
+    const btnConfirm = document.getElementById('rjConfirm');
+    let currentForm = null;
 
-  const btn = document.getElementById('btnAprobarTodas');
-  if(!btn) return;
+    function getCookie(name){
+      const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
+    }
+    function toast(msg, type='ok', ms=2200){
+      let t = document.getElementById('toast');
+      if(!t){
+        t = document.createElement('div');
+        t.id = 'toast';
+        t.className = 'toast';
+        document.body.appendChild(t);
+      }
+      t.className = 'toast ' + type;
+      t.textContent = msg;
+      requestAnimationFrame(()=> t.classList.add('show'));
+      setTimeout(()=> t.classList.remove('show'), ms);
+    }
 
-  btn.addEventListener('click', async function(){
-    btn.disabled = true;
-    const oldText = btn.textContent;
-    btn.textContent = 'Aprobando…';
+    function openModal(form){
+      currentForm = form;
+      txt.value = '';
+      warn.style.display = 'none';
+      ov.style.display = 'flex';
+      document.documentElement.style.overflow='hidden';
+      document.body.style.overflow='hidden';
+      setTimeout(()=> txt.focus(), 50);
+    }
+    function closeModal(){
+      ov.style.display = 'none';
+      document.documentElement.style.overflow='';
+      document.body.style.overflow='';
+      currentForm = null;
+    }
 
-    // Solo forms del tbody (evita agarrar otros forms de la página)
-    const forms = Array.from(document.querySelectorAll('tbody form'))
-      .filter(f => f.querySelector('.btn-aprobar'));
-
-    // 1) Validación: todas deben tener categoría
-    let firstMissing = null;
-    forms.forEach(f=>{
-      const sel = f.querySelector('select[name="categoria_id"]');
-      const ok  = sel && sel.value && String(sel.value).trim() !== '';
-      markError(sel, !ok);
-      if(!ok && !firstMissing) firstMissing = sel;
+    document.querySelectorAll('.js-open-rechazo').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        const form = this.closest('form');
+        if(!form) return;
+        openModal(form);
+      });
     });
 
-    if(firstMissing){
-      firstMissing.scrollIntoView({behavior:'smooth', block:'center'});
-      toast('Falta categoría en una o más filas.', 'warn', 2800);
-      btn.disabled = false;
-      btn.textContent = oldText;
-      return;
-    }
+    btnConfirm.addEventListener('click', async function(){
+      const motivo = (txt.value || '').trim();
+      if(!motivo){
+        warn.style.display = 'block';
+        txt.focus();
+        return;
+      }
+      if(!currentForm) return;
 
-    // 2) Envío REAL: igual que el botón "Aprobar" individual, con CSRF en header
-    let okCount = 0, failCount = 0;
+      const fd = new FormData(currentForm);
+      fd.set('accion', 'rechazar');
+      fd.set('comentario', motivo);
 
-    for(const f of forms){
+      const tr = currentForm.closest('tr');
+      const selProy = tr?.querySelector('.js-proyecto');
+      const chkEf   = tr?.querySelector('.js-efectivo');
+      if (selProy) fd.set('proyecto_id', selProy.value || '');
+      if (chkEf)   fd.set('efectivo', chkEf.checked ? '1' : '');
+
+      const csrf = currentForm.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+
       try{
-        const fd = new FormData(f);
-        fd.set('accion', 'aprobar');  // fuerza intención
-        const csrf = f.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
-
-        const r = await fetch(f.action, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': csrf
-          },
+        const r = await fetch(currentForm.action, {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken': csrf},
           body: fd
         });
+        const data = await r.json().catch(()=>({ok:r.ok}));
+        if (!r.ok || !data.ok) throw new Error('error');
 
-        let success = r.ok;
-        try{
-          const data = await r.json();
-          if (typeof data.ok !== 'undefined') success = !!data.ok;
-        }catch(_){ /* pudo venir HTML/redirect; usamos r.ok */ }
-
-        if(success){
-          okCount++;
-          const tr = f.closest('tr');
-          if (tr){
-            tr.style.transition = 'background .25s ease, opacity .25s ease';
-            tr.style.background = '#ecfdf5';
-            tr.style.opacity = '0.4';
-            setTimeout(()=> tr.remove(), 220);
-          }
-        }else{
-          failCount++;
+        closeModal();
+        if (tr){
+          tr.style.transition = 'background .25s ease, opacity .25s ease';
+          tr.style.background = '#fef2f2';
+          tr.style.opacity = '0.5';
+          setTimeout(()=> tr.remove(), 220);
         }
-      }catch(err){
-        console.error(err);
-        failCount++;
+        toast('Transacción rechazada y notificada.', 'ok');
+      }catch(_){
+        toast('No se pudo rechazar la transacción.', 'err', 3000);
       }
+    });
+
+    btnClose.addEventListener('click', closeModal);
+    btnCancel.addEventListener('click', closeModal);
+    ov.addEventListener('click', (e)=>{ if(e.target === ov) closeModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && ov.style.display==='flex') closeModal(); });
+  })();
+
+  // ===== Aprobar todas =====
+  (function(){
+    function getCookie(name){
+      const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)'); return m ? m.pop() : '';
+    }
+    function toast(msg, type='ok', ms=2200){
+      let t = document.getElementById('toast');
+      if(!t){ t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; document.body.appendChild(t); }
+      t.className = 'toast ' + type; t.textContent = msg;
+      requestAnimationFrame(()=> t.classList.add('show')); setTimeout(()=> t.classList.remove('show'), ms);
+    }
+    function markError(el, on){
+      if(!el) return;
+      el.style.outline = on ? '2px solid #dc2626' : '';
+      el.style.borderColor = on ? '#dc2626' : '';
+      el.style.backgroundColor = on ? '#fff1f2' : '';
     }
 
-    if (okCount && !failCount){
-      toast(`Listo: ${okCount} transacción(es) aprobada(s).`, 'ok');
-    }else if (okCount && failCount){
-      toast(`Hecho: ${okCount} aprobadas, ${failCount} con error.`, 'warn', 3200);
-    }else{
-      toast('No se pudo aprobar ninguna.', 'err', 3000);
-    }
+    const btn = document.getElementById('btnAprobarTodas');
+    if(!btn) return;
 
-    btn.disabled = false;
-    btn.textContent = oldText;
-  });
-})();
+    btn.addEventListener('click', async function(){
+      btn.disabled = true;
+      const old = btn.textContent;
+      btn.textContent = 'Aprobando…';
+
+      const rows  = Array.from(document.querySelectorAll('tbody tr.js-row'));
+      const forms = rows.map(r => r.querySelector('form.js-form-row'));
+
+      let firstMissing = null;
+      rows.forEach(r=>{
+        const f        = r.querySelector('form.js-form-row');
+        const selCat   = f?.querySelector('select[name="categoria_id"]');
+        const okCat    = selCat && selCat.value && String(selCat.value).trim() !== '';
+        markError(selCat, !okCat);
+        if(!okCat && !firstMissing) firstMissing = selCat;
+
+        const selProy = r.querySelector('.js-proyecto');
+        const chkEf   = r.querySelector('.js-efectivo');
+        const hidProy = f?.querySelector('input[name="proyecto_id"]');
+        const hidEf   = f?.querySelector('input[name="efectivo"]');
+        if (hidProy) hidProy.value = selProy?.value || '';
+        if (hidEf)   hidEf.value   = (chkEf && chkEf.checked) ? '1' : '';
+      });
+
+      if(firstMissing){
+        firstMissing.scrollIntoView({behavior:'smooth', block:'center'});
+        toast('Falta categoría en una o más filas.', 'warn', 2800);
+        btn.disabled = false; btn.textContent = old;
+        return;
+      }
+
+      let okCount = 0, failCount = 0;
+      for(const f of forms){
+        try{
+          const fd   = new FormData(f);
+          fd.set('accion', 'aprobar');
+          const csrf = f.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+
+          const r = await fetch(f.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With':'XMLHttpRequest', 'X-CSRFToken': csrf },
+            body: fd
+          });
+
+          let success = r.ok;
+          try { const data = await r.json(); if (typeof data.ok !== 'undefined') success = !!data.ok; } catch(_){}
+          if(success){
+            okCount++;
+            const tr = f.closest('tr');
+            if (tr){
+              tr.style.transition = 'background .25s ease, opacity .25s ease';
+              tr.style.background = '#ecfdf5';
+              tr.style.opacity = '0.4';
+              await new Promise(res=> setTimeout(res, 220));
+              tr.remove();
+            }
+          }else{
+            failCount++;
+          }
+        }catch(err){ failCount++; }
+      }
+
+      if (okCount && !failCount)      toast(`Listo: ${okCount} aprobada(s).`, 'ok');
+      else if (okCount && failCount)  toast(`Hecho: ${okCount} aprobadas, ${failCount} con error.`, 'warn', 3200);
+      else                            toast('No se pudo aprobar ninguna.', 'err', 3000);
+
+      btn.disabled = false; btn.textContent = old;
+    });
+  })();
 </script>
+
+<style>
+  /* Modal Rechazo */
+  .rj-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:24px}
+  .rj-modal{background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);width:min(640px,92vw);display:flex;flex-direction:column;overflow:hidden}
+  .rj-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee}
+  .rj-body{padding:14px 16px}
+  .rj-footer{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee}
+  .rj-close{border:0;background:transparent;font-size:22px;cursor:pointer}
+  .rj-btn{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer}
+  .rj-primary{background:#b91c1c;color:#fff;border-color:#b91c1c}
+
+  /* Evita que el textarea sobresalga del modal */
+  #rjTextarea {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    display: block;
+  }
+
+  /* Toast */
+  .toast {position:fixed;top:18px;left:50%;transform:translate(-50%,-8px);z-index:3000;background:#0f172a;color:#fff;border-radius:8px;padding:10px 14px;box-shadow:0 10px 25px rgba(0,0,0,.2);opacity:0;transition:opacity .2s,transform .2s;font-weight:600;font-size:14px}
+  .toast.show{opacity:1;transform:translate(-50%,0)} .toast.ok{background:#14532d} .toast.warn{background:#b45309} .toast.err{background:#7f1d1d}
+
+  /* Columnas compactas y centrado de acciones */
+  table .th-efectivo, table .td-efectivo { width:60px; text-align:center; }
+  table .th-acciones { width:260px; text-align:center; }
+  .td-acciones form { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; }
+  .btn-aprobar, .btn-rechazar { min-width:92px; }
+</style>
+
 {% endblock %}

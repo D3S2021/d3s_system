@@ -3,35 +3,63 @@
 
 {% block content_adminlike %}
 
-<form method="get" style="margin-bottom:6px">
-  Mes:
-  <select name="month">
-    {% for m in months %}
-      <option value="{{ m }}" {% if month == m %}selected{% endif %}>{{ m }}</option>
-    {% endfor %}
-  </select>
-  Año:
-  <input type="number" name="year" value="{{ year }}" style="width:90px" />
-  <button type="submit">Ver</button>
-</form>
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+  <h2 style="margin:0">Cierre de caja · {{ month }} / {{ year }}</h2>
+
+  <div style="margin-left:auto;"></div>
+
+  <button id="btnTarifasHoras"
+          style="border:0;background:#1e40af;color:#fff;font-weight:700;border-radius:8px;padding:8px 14px;cursor:pointer;">
+    PRECIO HORAS
+  </button>
+</div>
+
 
 {# Aclaración suave cuando no vino bien mes/año #}
 {% if show_hint %}
-    Completar <strong>Mes</strong> y <strong>Año</strong>.
-  {% endif %}
+  Completar <strong>Mes</strong> y <strong>Año</strong>.
+{% endif %}
 
-<div class="cards">
+<style>
+  /* === Grilla para 4 tarjetas === */
+  .cards.cards-4{
+    display:grid;
+    grid-template-columns: repeat(4, minmax(220px,1fr));
+    gap:14px;
+    margin:10px 0 16px;
+  }
+  @media (max-width:1100px){ .cards.cards-4{ grid-template-columns: repeat(2,1fr); } }
+  @media (max-width:560px){  .cards.cards-4{ grid-template-columns: 1fr; } }
+
+  .cards .card{
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    padding:14px 16px;
+  }
+  .cards .k{ color:#64748b; font-size:12px; margin-bottom:6px; }
+  .cards .number{ font-weight:800; font-size:22px; font-variant-numeric: tabular-nums; }
+</style>
+
+<div class="cards cards-4">
   <div class="card">
     <div class="k">Ingresos</div>
     <div class="number">${{ total_ingresos }}</div>
   </div>
+
   <div class="card">
     <div class="k">Gastos</div>
     <div class="number">${{ total_gastos }}</div>
   </div>
+
   <div class="card">
-    <div class="k">Saldo</div>
-    <div class="number">${{ saldo }}</div>
+    <div class="k">Saldo CUENTA</div>
+    <div class="number">${{ saldo_cuenta }}</div>
+  </div>
+
+  <div class="card">
+    <div class="k">Saldo EFECTIVO</div>
+    <div class="number">${{ saldo_efectivo }}</div>
   </div>
 </div>
 
@@ -98,5 +126,89 @@
 {% else %}
   <p style="margin:10px 0">No hay horas aprobadas para el período seleccionado.</p>
 {% endif %}
+
+{# ====================== MODAL PRECIO HORAS ====================== #}
+<div id="tarifasModalOverlay" class="tm-overlay" aria-hidden="true" style="display:none">
+  <div class="tm-modal" role="dialog" aria-modal="true" aria-labelledby="tmTitle">
+    <div class="tm-header">
+      <h3 id="tmTitle" style="margin:0">Tarifa por hora (usuarios)</h3>
+      <button type="button" class="tm-close" aria-label="Cerrar">×</button>
+    </div>
+    <div class="tm-body" id="tmBody">Cargando…</div>
+    <div class="tm-footer">
+      <button type="button" class="tm-btn" id="tmCancel">Cancelar</button>
+      <button type="button" class="tm-btn tm-primary" id="tmSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Estilos del modal */
+  .tm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:24px}
+  .tm-modal{background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);width:min(860px,92vw);display:flex;flex-direction:column;overflow:hidden}
+  .tm-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee}
+  .tm-body{padding:10px 14px;max-height:68vh;overflow:auto}
+  .tm-footer{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee}
+  .tm-close{border:0;background:transparent;font-size:22px;cursor:pointer}
+  .tm-btn{border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:8px 14px;cursor:pointer}
+  .tm-primary{background:#1e40af;color:#fff;border-color:#1e40af}
+  .tm-table{width:100%;border-collapse:collapse}
+  .tm-table th,.tm-table td{border-bottom:1px solid #eee;padding:8px;text-align:left}
+  .tm-num{width:140px;text-align:right}
+</style>
+
+<script>
+(function(){
+  function getCookie(name){
+    const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
+  }
+  const btn = document.getElementById('btnTarifasHoras');
+  const ov  = document.getElementById('tarifasModalOverlay');
+  const body= document.getElementById('tmBody');
+  const bClose = ov.querySelector('.tm-close');
+  const bCancel= document.getElementById('tmCancel');
+  const bSave  = document.getElementById('tmSave');
+
+  function openModal(){
+    body.textContent = 'Cargando…';
+    ov.style.display = 'flex';
+    fetch("{% url 'economia:tarifas_modal' %}", {headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
+      .then(r=>r.text()).then(html=> body.innerHTML = html)
+      .catch(()=> body.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
+    document.documentElement.style.overflow='hidden';
+    document.body.style.overflow='hidden';
+  }
+  function closeModal(){
+    ov.style.display = 'none';
+    document.documentElement.style.overflow='';
+    document.body.style.overflow='';
+  }
+
+  btn?.addEventListener('click', openModal);
+  bClose?.addEventListener('click', closeModal);
+  bCancel?.addEventListener('click', closeModal);
+  ov?.addEventListener('click', (e)=>{ if(e.target===ov) closeModal(); });
+
+  bSave?.addEventListener('click', async function(){
+    const form = body.querySelector('#formTarifasHoras');
+    if(!form) return;
+    const fd = new FormData(form);
+    try{
+      const r = await fetch("{% url 'economia:tarifas_guardar' %}", {
+        method:'POST',
+        credentials:'same-origin',
+        headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCookie('csrftoken')},
+        body: fd
+      });
+      const data = await r.json();
+      if(!r.ok || !data.ok) throw 0;
+      closeModal();
+      alert(`Listo: ${data.saved} tarifa(s) guardada(s).`);
+    }catch(_){
+      alert('No se pudo guardar. Revisá los valores.');
+    }
+  });
+})();
+</script>
 
 {% endblock %}

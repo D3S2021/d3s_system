@@ -1,0 +1,30 @@
+<form id="formTarifasHoras">
+  {% csrf_token %}
+  <table class="tm-table">
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th class="tm-num">Tarifa / h</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in usuarios %}
+        {% with nombre=u.get_full_name|default:u.username %}
+        <tr>
+          <td>{{ nombre }}</td>
+          <td>
+            <input type="number"
+                   name="rate_{{ u.id }}"
+                   step="0.01"
+                   min="0"
+                   value="{{ u.tarifa_val }}"
+                   style="width:130px;text-align:right">
+          </td>
+        </tr>
+        {% endwith %}
+      {% empty %}
+        <tr><td colspan="2" style="color:#64748b">No hay usuarios activos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>

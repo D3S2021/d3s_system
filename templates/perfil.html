@@ -318,7 +318,12 @@
           <td><span class="badge-enviada">Enviada</span></td>
           <td>
             {% if perms.economia.can_edit_own_transactions and t.estado == 'pendiente' and t.usuario_id == request.user.id %}
-              <a href="{% url 'economia:tx_mia_editar' t.id %}">Editar</a>
+              {# >>> EDITAR: abre el mismo modal de "Nueva transacción" con pk para precargar #}
+              <a
+                href="{% url 'economia:nuevo' %}?modal=1&pk={{ t.id }}"
+                class="btn-link js-open-modal"
+                data-modal-url="{% url 'economia:nuevo' %}?modal=1&pk={{ t.id }}"
+              >Editar</a>
             {% else %}—{% endif %}
           </td>
         </tr>
@@ -649,28 +654,63 @@ document.addEventListener('click', function(e){
   btn.textContent = visible ? 'Ver' : 'Ocultar';
 });
 
-/* ===== Modal “Nueva Transacción / Nuevo Gasto” ===== */
+/* ===== Modal “Nueva Transacción / Editar Transacción” ===== */
 (function(){
-  const btnOpen = document.getElementById('btnNuevaTransaccion');
-  const overlay = document.getElementById('modalTransaccion');
-  const btnClose = document.getElementById('closeModal');
-  const container = document.getElementById('modalFormContainer');
-  const URL_FORM = "{% url 'economia:nuevo' %}";
+  const overlay    = document.getElementById('modalTransaccion');
+  const btnClose   = document.getElementById('closeModal');
+  const container  = document.getElementById('modalFormContainer');
+  const titleEl    = document.getElementById('modalTransaccionTitle');
+  const defaultTitle = titleEl ? titleEl.textContent : 'Nueva Transacción';
+  const URL_FORM   = "{% url 'economia:nuevo' %}";
 
-  function openModal(){
+  function openModalWith(url){
+    if (!url) url = URL_FORM;
+
+    // Si la URL ya trae ?..., conservamos y agregamos modal=1; si no, la agregamos
+    if (!/modal=1/.test(url)) {
+      url = url + (url.includes('?') ? '&' : '?') + 'modal=1';
+    }
+
+    // Cambiar título si detectamos edición (presencia de pk=)
+    if (titleEl){
+      if (/[\?&]pk=\d+/.test(url)) {
+        titleEl.textContent = 'Editar transacción';
+      } else {
+        titleEl.textContent = defaultTitle;
+      }
+    }
+
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
     container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
-    fetch(URL_FORM, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
+
+    fetch(url, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
       .then(r => r.text())
       .then(html => { container.innerHTML = html; })
       .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });
   }
-  function closeModal(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
-  if (btnOpen) btnOpen.addEventListener('click', openModal);
+
+  function closeModal(){
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden','true');
+    if (titleEl) titleEl.textContent = defaultTitle;
+  }
+
+  const btnOpen = document.getElementById('btnNuevaTransaccion');
+  if (btnOpen) btnOpen.addEventListener('click', function(){ openModalWith(URL_FORM); });
+
   btnClose.addEventListener('click', closeModal);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+  // Delegación para enlaces "Editar" que usan el mismo modal
+  document.addEventListener('click', function(e){
+    const a = e.target.closest('.js-open-modal');
+    if (!a) return;
+    e.preventDefault();
+    const url = a.getAttribute('data-modal-url') || a.getAttribute('href');
+    openModalWith(url);
+  });
 })();
 
 /* ===== Modal “Cargar horas” (AJAX) ===== */

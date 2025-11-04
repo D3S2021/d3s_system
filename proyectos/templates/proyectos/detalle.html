@@ -77,6 +77,27 @@
   #modalContainer #formTarea .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:12px;}
   @media(max-width:720px){#modalContainer #formTarea .grid-2{grid-template-columns:1fr}}
   #modalContainer #formTarea .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+
+  /* ====== Estilos del modal de DATOS ====== */
+  .kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px;margin-bottom:14px}
+  @media(max-width:640px){.kpi-grid{grid-template-columns:1fr}}
+  .kpi{border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa}
+  .kpi .label{font-size:12px;color:#64748b}
+  .kpi .value{font-weight:800;font-size:18px;color:#0f172a;margin-top:2px}
+  .kpi .sub{color:#64748b;font-size:12px;margin-top:2px}
+
+  .rates{width:100%;border-collapse:collapse;margin-top:6px}
+  .rates th,.rates td{border-bottom:1px solid #eee;padding:8px;text-align:left}
+  .rates tfoot td{font-weight:700}
+  .ok{color:#0f766e}
+  .warn{color:#b45309}
+  .bad{color:#b91c1c}
+
+  .num{text-align:right}
+  .money{font-variant-numeric:tabular-nums}
+  .pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
+  .pill.ok{background:#ecfdf5;color:#065f46}
+  .pill.bad{background:#fef2f2;color:#991b1b}
 </style>
 {% endblock %}
 
@@ -85,9 +106,12 @@
   <a class="btn" href="{% url 'proyectos:dashboard' %}"
      onclick="if (history.length > 1){history.back();return false;}">← Volver</a>
 
-  <a class="btn btn-primary" id="btnEditarProyecto" data-url="{% url 'proyectos:editar_modal' proyecto.id %}">
-    Editar proyecto
-  </a>
+  <div style="display:flex;gap:8px">
+    <a class="btn" id="btnDatosProyecto">Datos</a>
+    <a class="btn btn-primary" id="btnEditarProyecto" data-url="{% url 'proyectos:editar_modal' proyecto.id %}">
+      Editar proyecto
+    </a>
+  </div>
 </div>
 
 <h1 style="margin:0 0 4px">{{ proyecto.nombre }}</h1>
@@ -167,6 +191,77 @@
     </div>
   </div>
 </div>
+
+{# ======= CONTENIDO OCULTO DEL MODAL "DATOS" (se clona al abrir) ======= #}
+<div id="datosProyectoTemplate" class="visually-hidden">
+  <div>
+    <div class="kpi-grid">
+      <div class="kpi">
+        <div class="label">Horas estimadas</div>
+        <div class="value"><span id="kpiEstimadas">{{ horas_presup|default:0 }}</span> h</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Horas reales</div>
+        <div class="value"><span id="kpiReales">{{ horas_cargadas|default:0 }}</span> h</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Presupuesto</div>
+        <div class="value money">$ <span id="kpiPresupuesto">
+          {% if proyecto.presupuesto_total %}{{ proyecto.presupuesto_total }}{% else %}—{% endif %}
+        </span></div>
+      </div>
+      <div class="kpi">
+        <div class="label">Gastos totales</div>
+        <div class="value money">$ <span id="kpiTotalGastos">{{ gastos_proyecto|default:0 }}</span></div>
+      </div>
+    </div>
+
+    <h4 style="margin:6px 0 6px">Horas por miembro</h4>
+    <table class="rates" id="tablaTarifas"
+           data-presupuesto="{{ proyecto.presupuesto_total|default_if_none:0 }}"
+           data-gastos="{{ gastos_proyecto|default:0 }}">
+      <thead>
+        <tr>
+          <th>Miembro</th>
+          <th class="num">Horas</th>
+          <th class="num">Precio / h</th>
+          <th class="num">Costo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in horas_por_usuario %}
+          <tr data-user-id="{{ row.user_id }}">
+            <td>{{ row.nombre }}</td>
+            <td class="num"><span class="h-usuario">{{ row.horas|default:0 }}</span></td>
+            <td class="num">
+              <span class="tarifa-usuario" data-user-id="{{ row.user_id }}">—</span>
+            </td>
+
+            <td class="num money">$ <span class="costo-usuario">0</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" style="color:#64748b">Aún no hay horas cargadas.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" class="num">Total costo horas</td>
+          <td class="num money">$ <span id="totalCosto">0</span></td>
+        </tr>
+        <tr>
+          <td colspan="3" class="num">Gastos cargados</td>
+          <td class="num money">$ <span id="totalGastosEconomia">{{ gastos_proyecto|default:0 }}</span></td>
+        </tr>
+        <tr>
+          <td colspan="3" class="num">DIFERENCIA CON LO PRESUPUESTADO</td>
+          <td class="num">
+            <span id="badgeComparacion" class="pill">—</span>
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -177,6 +272,7 @@
   function getCookie(name){
     const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
   }
+  function money(n){ n = isFinite(+n) ? +n : 0; return n.toLocaleString('es-AR', {maximumFractionDigits:2}); }
 
   /* ===== Drag & Drop ===== */
   window.dragTask = function(ev){ window._draggedId = ev.currentTarget.dataset.tarea; ev.dataTransfer.effectAllowed='move'; };
@@ -202,8 +298,8 @@
   const titleEl  = document.getElementById('modalTitle');
   const contEl   = document.getElementById('modalContainer');
 
-  function openModal(titulo, url){
-    CURRENT_URL = url;
+  function openModal(titulo, urlOrNode){
+    CURRENT_URL = typeof urlOrNode === 'string' ? urlOrNode : null;
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden','false');
     titleEl.textContent = titulo;
@@ -211,14 +307,20 @@
     document.documentElement.style.overflow='hidden';
     document.body.style.overflow='hidden';
 
-    fetch(addModalFlag(url), { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
-      .then(r => r.text())
-      .then(html => {
-        contEl.innerHTML = html;
-        hookTareaForm();
-        hookProyectoForm();
-      })
-      .catch(() => contEl.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
+    if (typeof urlOrNode === 'string') {
+      fetch(addModalFlag(urlOrNode), { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
+        .then(r => r.text())
+        .then(html => {
+          contEl.innerHTML = html;
+          hookTareaForm();
+          hookProyectoForm();
+        })
+        .catch(() => contEl.innerHTML = '<p style="color:#a00">Error al cargar.</p>');
+    } else {
+      contEl.innerHTML = '';
+      contEl.appendChild(urlOrNode);
+      initDatosModal();   // Punto 6: inicia lógica y precarga tarifas
+    }
   }
   function closeModal(){
     overlay.classList.remove('open');
@@ -235,7 +337,6 @@
 
   /* ===== Delegated clicks ===== */
   document.addEventListener('click', async (e)=>{
-    // Nueva tarea
     const btnNew = e.target.closest('#btnNuevaTarea');
     if (btnNew){
       e.preventDefault();
@@ -244,7 +345,6 @@
       return;
     }
 
-    // Editar tarea
     const btnEditTask = e.target.closest('.js-edit-task');
     if (btnEditTask){
       e.preventDefault();
@@ -253,7 +353,6 @@
       return;
     }
 
-    // Eliminar tarea
     const btnDel = e.target.closest('.js-delete-task');
     if (btnDel){
       e.preventDefault();
@@ -283,12 +382,21 @@
       return;
     }
 
-    // Editar proyecto
     const btnEditProj = e.target.closest('#btnEditarProyecto');
     if (btnEditProj){
       e.preventDefault();
       const url = btnEditProj.getAttribute('data-url');
       if (url) openModal('Editar proyecto', url);
+      return;
+    }
+
+    const btnDatos = e.target.closest('#btnDatosProyecto');
+    if (btnDatos){
+      e.preventDefault();
+      const tpl = document.getElementById('datosProyectoTemplate');
+      if (!tpl){ alert('No hay contenido de datos.'); return; }
+      const node = tpl.firstElementChild.cloneNode(true);
+      openModal('Datos del proyecto', node);
       return;
     }
   });
@@ -320,18 +428,16 @@
   }
 
   /* ===== Hooks de formularios dentro del modal ===== */
-  // >>>>>>>>>> CORREGIDO: versión con delegación para la "X" de los chips <<<<<<<<<<
   window.hookTareaForm = function(){
     const form = contEl.querySelector('#formTarea');
     if (!form) return;
 
     if (!form.getAttribute('action')) form.setAttribute('action', CURRENT_URL);
 
-    const sel       = contEl.querySelector('#id_asignados');      // <select multiple> oculto
-    const chipsWrap = contEl.querySelector('#chipsAsignados');    // contenedor de chips visibles
-    const btnAdd    = contEl.querySelector('#btnAddAsignado');    // botón "+"
+    const sel       = contEl.querySelector('#id_asignados');
+    const chipsWrap = contEl.querySelector('#chipsAsignados');
+    const btnAdd    = contEl.querySelector('#btnAddAsignado');
 
-    // limpiar "admin"
     if (sel){
       Array.from(sel.options).forEach(opt=>{
         if((opt.textContent||'').trim().toLowerCase()==='admin') opt.remove();
@@ -340,24 +446,23 @@
 
     function renderChips(){
       if (!sel || !chipsWrap) return;
-      const selected = Array.from(sel.options).filter(o=>o.selected);
+      const selected = Array.from(sel.options).filter(o => o.selected);
       if (!selected.length){
         chipsWrap.innerHTML = '<span class="chip chip-empty">Sin asignados</span>';
         return;
       }
-      chipsWrap.innerHTML = selected.map(o =>
-        `<span class="chip" data-val="${o.value}">
-           <span>${o.text}</span>
-           <button type="button" class="rm" title="Quitar" aria-label="Quitar">×</button>
-         </span>`
-      ).join('');
+      chipsWrap.innerHTML = selected.map(o => `
+        <span class="chip" data-val="${o.value}">
+          <span>${o.text}</span>
+          <button type="button" class="rm" title="Quitar" aria-label="Quitar">×</button>
+        </span>
+      `).join('');
     }
 
-    // render inicial + re-render por cambios del select oculto
+
     renderChips();
     sel?.addEventListener('change', renderChips);
 
-    // ✅ Delegación: quitar asignado al clickear la X
     chipsWrap?.addEventListener('click', (e)=>{
       const btn = e.target.closest('.rm');
       if (!btn) return;
@@ -368,14 +473,15 @@
       renderChips();
     });
 
-    // Mini menú con los no-seleccionados
     function openMiniMenu(anchor){
       const notSelected = Array.from(sel.options).filter(o=>!o.selected);
       if (!notSelected.length) return;
 
       const menu = document.createElement('div');
       menu.className = 'mini-menu';
-      menu.innerHTML = notSelected.map(o=>`<button type="button" class="mini-item" data-val="${o.value}">${o.text}</button>`).join('');
+      menu.innerHTML = notSelected.map(o => `
+        <button type="button" class="mini-item" data-val="${o.value}">${o.text}</button>
+      `).join('');
       document.body.appendChild(menu);
 
       const r = anchor.getBoundingClientRect();
@@ -415,14 +521,12 @@
 
     btnAdd?.addEventListener('click', ()=>{ if (sel) openMiniMenu(btnAdd); });
 
-    // Cancelar modal
     const btnCancel = contEl.querySelector('#btnCancelarTarea');
-    if (btnCancel) btnCancel.addEventListener('click', ()=> {
+    if (btnCancel) btnCancel.addEventListener('click', ()=>{
       document.getElementById('modalGeneral')?.classList.remove('open');
       document.documentElement.style.overflow=''; document.body.style.overflow='';
     });
 
-    // Submit AJAX
     form.addEventListener('submit', async function(e){
       e.preventDefault();
       try{
@@ -439,7 +543,7 @@
     if (!form.getAttribute('action')) form.setAttribute('action', CURRENT_URL);
 
     const btnCancel = contEl.querySelector('#btnCancelarProyecto');
-    if (btnCancel) btnCancel.addEventListener('click', ()=> {
+    if (btnCancel) btnCancel.addEventListener('click', ()=>{
       document.getElementById('modalGeneral')?.classList.remove('open');
       document.documentElement.style.overflow=''; document.body.style.overflow='';
     });
@@ -484,6 +588,144 @@
       }catch(_){ flashError(); alert('No se pudo cambiar el estado del proyecto.'); }
     });
   })();
+
+  /* ======= Lógica del modal de DATOS (cliente) ======= */
+  function initDatosModal(){
+    const tabla = contEl.querySelector('#tablaTarifas');
+    if (!tabla) return;
+
+    const presupuesto = +tabla.dataset.presupuesto || 0;
+    const gastosEco   = +tabla.dataset.gastos || 0;
+
+    const kpiEco = contEl.querySelector('#kpiGastosEconomia');
+    if (kpiEco) kpiEco.textContent = money(gastosEco);
+
+    /// --- Punto 6: precargar tarifas por usuario desde economía ---
+const tarifasURL = "{% url 'economia:tarifas_json' %}";
+
+// helper para escribir la tarifa aunque no haya <input>
+function setTarifaEnFila(tr, valor){
+  const inp = tr.querySelector('.inp-tarifa');
+  if (inp) {
+    inp.value = valor;               // si hay input, lo rellenamos
+  } else {
+    // si no hay input, buscamos un contenedor de texto; si no existe, lo creamos
+    let span = tr.querySelector('.tarifa-valor');
+    if (!span) {
+      span = document.createElement('span');
+      span.className = 'tarifa-valor';
+      const td = tr.querySelector('td:nth-child(3)') || tr.children[2]; // 3ra columna
+      if (td) { td.textContent = ''; td.appendChild(span); }
+    }
+    span.textContent = Number(valor || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+}
+
+fetch(tarifasURL, { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
+  .then(r => r.ok ? r.json() : ({}))
+  .then(data => {
+    // soporto ambos formatos:
+    // 1) { "3": 10000, "5": 8000, ... }
+    // 2) { tarifas: [{user_id: 3, tarifa_hora: 10000}, ...] }
+    let map = Object.create(null);
+
+    if (data && Array.isArray(data.tarifas)) {
+      data.tarifas.forEach(t => { map[String(t.user_id)] = +t.tarifa_hora || 0; });
+    } else if (data && typeof data === 'object') {
+      Object.keys(data).forEach(k => { map[String(k)] = +data[k] || 0; });
+    }
+
+    // escribir en cada fila
+    tabla.querySelectorAll('tbody tr').forEach(tr => {
+      const uid = String(tr.getAttribute('data-user-id') || '');
+      if (uid && Object.prototype.hasOwnProperty.call(map, uid)) {
+        setTarifaEnFila(tr, map[uid]);
+      }
+    });
+
+    recalcular(); // recalcular con las tarifas precargadas
+  })
+  .catch(() => { recalcular(); });
+
+
+    function recalcular(){
+  // --- formateo sin decimales
+  const money0 = (n) => {
+    n = isFinite(+n) ? +n : 0;
+    return n.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  };
+
+  // --- helpers de parseo (acepta "10.000,00", "10000.00", etc.)
+  const parseLat = (v) => {
+    const s = String(v ?? '0')
+      .replace(/\s/g, '')
+      .replace(/\./g, '')   // miles
+      .replace(',', '.');   // decimal
+    const n = parseFloat(s);
+    return isFinite(n) ? n : 0;
+  };
+
+  // presupuesto y gastos desde data-* (normalizados)
+  const presupuestoNum = parseLat(tabla.dataset.presupuesto);
+  const gastosEcoNum   = parseLat(tabla.dataset.gastos);
+
+  let costoHoras = 0;
+
+  tabla.querySelectorAll('tbody tr').forEach(tr => {
+    // horas pueden venir como "1,0"
+    const h = parseLat(tr.querySelector('.h-usuario')?.textContent || '0');
+
+    // tarifa: input o span.tarifa-valor
+    let tarifa = 0;
+    const inp  = tr.querySelector('.inp-tarifa');
+    if (inp){
+      tarifa = parseLat(inp.value);
+    }else{
+      const span = tr.querySelector('.tarifa-valor');
+      tarifa = parseLat(span?.textContent || '0');
+      if (span) span.textContent = money0(tarifa);
+    }
+
+    const costo = h * tarifa;
+    const costoEl = tr.querySelector('.costo-usuario');
+    if (costoEl) costoEl.textContent = money0(costo);
+
+    costoHoras += costo;
+  });
+
+  // totales
+  const totalCostoEl = contEl.querySelector('#totalCosto');
+  if (totalCostoEl) totalCostoEl.textContent = money0(costoHoras);
+
+  const gastosEcoEl = contEl.querySelector('#totalGastosEconomia');
+  if (gastosEcoEl) gastosEcoEl.textContent = money0(gastosEcoNum);
+
+  const totalGastos = costoHoras + gastosEcoNum;
+  const kpiTotal = contEl.querySelector('#kpiTotalGastos');
+  if (kpiTotal) kpiTotal.textContent = money0(totalGastos);
+
+  // comparador con presupuesto
+  const badge = contEl.querySelector('#badgeComparacion');
+  if (!presupuestoNum){
+    badge.className = 'pill';
+    badge.textContent = 'Sin presupuesto';
+  } else {
+    const diff = presupuestoNum - totalGastos;
+    if (diff >= 0){
+      badge.className = 'pill ok';
+      badge.textContent = `OK · Ganancia $ ${money0(diff)}`;
+    } else {
+      badge.className = 'pill bad';
+      badge.textContent = `Perdemos $ ${money0(Math.abs(diff))}`;
+    }
+  }
+}
+
+
+    tabla.addEventListener('input', (e)=>{
+      if (e.target.matches('.inp-tarifa')) recalcular();
+    });
+  }
 
 })();
 </script>
