@@ -14,7 +14,6 @@
   </button>
 </div>
 
-
 <style>
   /* === Grilla para 4 tarjetas === */
   .cards.cards-4{
@@ -73,6 +72,16 @@
   .fila-total-persona td { font-weight:600; background:#fcfcfc; }
   .subtle { color:#666; font-size:12px; }
   .person-header { display:flex; align-items:baseline; gap:8px; margin:14px 0 6px; }
+
+  /* Botón "Ver" estilo link (igual que perfil) */
+  .btn-link { border:none; background:transparent; color:#2c7be5; cursor:pointer; font-weight:600; padding:0; }
+  .btn-link:hover { text-decoration:underline; }
+
+  /* Subfila (detalle) */
+  .detalle-row td{ background:#fbfdff; }
+  .subtabla{ width:100%; border-collapse:collapse; }
+  .subtabla th, .subtabla td{ padding:8px; border-bottom:1px solid #eef2f7; text-align:left; }
+  .subtabla th{ background:#f8fafc; color:#334155; }
 </style>
 
 <div class="resumen-horas" style="display:flex; align-items:center; justify-content:space-between; margin:6px 0 4px;">
@@ -92,11 +101,13 @@
         <tr>
           <th style="width:60%">Proyecto/Area</th>
           <th style="width:20%">Horas</th>
+          <th style="width:20%">Registros</th>
         </tr>
       </thead>
       <tbody>
         {% for it in p.proyectos %}
-          <tr>
+          {# Fila principal #}
+          <tr data-row="principal">
             <td>
               {% if it.proyecto_id %}
                 <a href="{% url 'proyectos:detalle' it.proyecto_id %}">{{ it.proyecto }}</a>
@@ -105,11 +116,26 @@
               {% endif %}
             </td>
             <td>{{ it.horas|floatformat:2 }}</td>
+            <td>
+              <button type="button"
+                      class="btn-link js-ver-reg"
+                      data-user="{{ p.username }}"
+                      data-persona="{{ p.persona }}"
+                      data-proyecto="{{ it.proyecto_id|default:0 }}"
+                      data-proyecto-nombre="{{ it.proyecto|default:'—' }}">
+                Ver
+              </button>
+            </td>
+          </tr>
+          {# Fila detalle (se llena por AJAX) #}
+          <tr class="detalle-row" id="det-{{ p.username }}-{{ it.proyecto_id|default:0 }}" style="display:none">
+            <td colspan="3"><div class="detalle-box">Cargando…</div></td>
           </tr>
         {% endfor %}
         <tr class="fila-total-persona">
           <td>Total {{ p.persona }}</td>
           <td>{{ p.total_persona|floatformat:2 }}</td>
+          <td></td>
         </tr>
       </tbody>
     </table>
@@ -122,7 +148,7 @@
   <p style="margin:10px 0">No hay horas aprobadas para el período seleccionado.</p>
 {% endif %}
 
-{# ====================== MODAL PRECIO HORAS ====================== #}
+{# ====================== MODAL PRECIO HORAS (sin cambios) ====================== #}
 <div id="tarifasModalOverlay" class="tm-overlay" aria-hidden="true" style="display:none">
   <div class="tm-modal" role="dialog" aria-modal="true" aria-labelledby="tmTitle">
     <div class="tm-header">
@@ -138,7 +164,6 @@
 </div>
 
 <style>
-  /* Estilos del modal */
   .tm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1200;display:flex;align-items:center;justify-content:center;padding:24px}
   .tm-modal{background:#fff;border-radius:12px;box-shadow:0 10px 35px rgba(0,0,0,.25);width:min(860px,92vw);display:flex;flex-direction:column;overflow:hidden}
   .tm-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee}
@@ -153,6 +178,7 @@
 </style>
 
 <script>
+/* ===== Modal de tarifas (igual que tenías) ===== */
 (function(){
   function getCookie(name){
     const m=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)'); return m?m.pop():'';
@@ -202,6 +228,48 @@
     }catch(_){
       alert('No se pudo guardar. Revisá los valores.');
     }
+  });
+})();
+
+/* ===== Subtabla de registros (SIN filtro de período) ===== */
+(function(){
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.js-ver-reg');
+    if(!btn) return;
+
+    const user = (btn.dataset.user || '').trim();
+    const pid  = (btn.dataset.proyecto || '0').trim();
+    const rowId = `det-${user}-${pid}`;
+    const detRow = document.getElementById(rowId);
+
+    // Toggle si ya está abierta
+    if(detRow && detRow.style.display !== 'none'){
+      detRow.style.display = 'none';
+      btn.textContent = 'Ver';
+      return;
+    }
+
+    // Asegurar existencias
+    if(!detRow) return;
+
+    // Loading…
+    detRow.style.display = 'table-row';
+    btn.textContent = 'Ocultar';
+    const box = detRow.querySelector('.detalle-box');
+    if (box) box.textContent = 'Cargando…';
+
+    // OJO: NO enviamos month/year -> queremos TODAS las horas
+    const params = new URLSearchParams({ user: user, proyecto_id: pid });
+
+    fetch("{% url 'economia:horas_registros_modal' %}?" + params.toString(),
+          { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
+      .then(r => r.text())
+      .then(html => {
+        if (box) box.innerHTML = html;
+      })
+      .catch(() => {
+        if (box) box.innerHTML = '<p style="color:#a00;margin:0">No se pudieron cargar los registros.</p>';
+      });
   });
 })();
 </script>

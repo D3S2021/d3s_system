@@ -43,8 +43,8 @@
 
         <fieldset class="module aligned">
 
-          <!-- CATEGORÍA (solo Franco y solo si el form la trae) -->
-          {% if form.categoria %}
+          <!-- CATEGORÍA (solo usuarios con permiso y solo si el form la trae) -->
+          {% if perms.economia.can_add_ingresos and form.categoria %}
           <div class="form-row field-categoria">
             <div>
               <label for="{{ form.categoria.id_for_label }}">Categoría:</label>

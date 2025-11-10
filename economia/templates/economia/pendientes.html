@@ -125,7 +125,7 @@
 </div>
 
 <script>
-  // ===== Sincronizar proyecto y efectivo -> hidden en envíos individuales =====
+  // ===== Sincronizar proyecto/efectivo/categoría -> hidden en envíos individuales =====
   document.querySelectorAll('tbody tr.js-row').forEach(function(tr){
     const selProyecto     = tr.querySelector('.js-proyecto');
     const chkEfectivo     = tr.querySelector('.js-efectivo');
@@ -133,10 +133,19 @@
     const hiddenProyecto  = form ? form.querySelector('input[name="proyecto_id"]') : null;
     const hiddenEfectivo  = form ? form.querySelector('input[name="efectivo"]') : null;
 
+    // NUEVO: referencias de categoría (visible y oculto)
+    const selCatVisible   = tr.querySelector('.td-categoria select');
+    const selCatHidden    = form ? form.querySelector('select[name="categoria_id"]') : null;
+
+    // NUEVO: al cargar la fila, copiar valor inicial del visible al oculto
+    if (selCatHidden) selCatHidden.value = selCatVisible?.value || '';
+
     if (form){
       form.addEventListener('submit', function(){
         if (hiddenProyecto) hiddenProyecto.value = selProyecto?.value || '';
         if (hiddenEfectivo) hiddenEfectivo.value = (chkEfectivo && chkEfectivo.checked) ? '1' : '';
+        // NUEVO: antes de enviar, asegurar sincronización categoría visible -> oculto
+        if (selCatHidden) selCatHidden.value = selCatVisible?.value || '';
       });
     }
   });
@@ -274,10 +283,15 @@
       let firstMissing = null;
       rows.forEach(r=>{
         const f        = r.querySelector('form.js-form-row');
-        const selCat   = f?.querySelector('select[name="categoria_id"]');
-        const okCat    = selCat && selCat.value && String(selCat.value).trim() !== '';
-        markError(selCat, !okCat);
-        if(!okCat && !firstMissing) firstMissing = selCat;
+        const selCatV  = r.querySelector('.td-categoria select');                 // visible
+        const selCatH  = f?.querySelector('select[name="categoria_id"]');         // oculto
+
+        // NUEVO: sincronizar siempre visible -> oculto antes de validar
+        if (selCatH) selCatH.value = selCatV?.value || '';
+
+        const okCat    = selCatH && selCatH.value && String(selCatH.value).trim() !== '';
+        markError(selCatH, !okCat);
+        if(!okCat && !firstMissing) firstMissing = selCatH;
 
         const selProy = r.querySelector('.js-proyecto');
         const chkEf   = r.querySelector('.js-efectivo');

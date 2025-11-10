@@ -157,6 +157,36 @@ def dashboard_economia(request):
     return render(request, "economia/dashboard.html", context)
 
 
+@login_required
+def editar_mia_desde_perfil(request, pk):
+    """
+    Edición de una transacción propia (solo si está pendiente).
+    El formulario no muestra categoría para usuarios no-validadores.
+    """
+    tx = get_object_or_404(Transaccion, pk=pk)
+
+    if tx.usuario_id != request.user.id or tx.estado != "pendiente":
+        return HttpResponseForbidden("No tenés permisos para editar esta transacción.")
+
+    if request.method == "POST":
+        form = GastoForm(request.POST, instance=tx, user=request.user)
+        if "categoria" in form.fields:
+            del form.fields["categoria"]
+        if form.is_valid():
+            form.save()
+            messages.success(request, "✅ Transacción actualizada correctamente.")
+            return redirect("perfil")
+    else:
+        form = GastoForm(instance=tx, user=request.user)
+        if "categoria" in form.fields:
+            del form.fields["categoria"]
+
+    return render(
+        request,
+        "economia/nueva_transaccion.html",
+        {"form": form, "modo_edicion": True, "tx": tx},
+    )
+
 # ---------------------------------------------------------------------------
 # Nueva transacción (cargadores y validadores)
 # ---------------------------------------------------------------------------
@@ -221,6 +251,10 @@ def nueva_transaccion(request):
         if form.is_valid():
             obj = form.save(commit=False)
 
+            # <<< NUEVO >>> si el form incluye 'categoria', persistirla explícitamente
+            if "categoria" in form.fields:
+                obj.categoria = form.cleaned_data.get("categoria") or None
+
             if not modo_edicion:
                 # Alta
                 obj.usuario = request.user
@@ -257,36 +291,6 @@ def nueva_transaccion(request):
     # Página completa (sigue usando tu template existente)
     return render(request, "economia/nueva_transaccion.html", ctx)
 
-
-@login_required
-def editar_mia_desde_perfil(request, pk):
-    """
-    Edición de una transacción propia (solo si está pendiente).
-    El formulario no muestra categoría para usuarios no-validadores.
-    """
-    tx = get_object_or_404(Transaccion, pk=pk)
-
-    if tx.usuario_id != request.user.id or tx.estado != "pendiente":
-        return HttpResponseForbidden("No tenés permisos para editar esta transacción.")
-
-    if request.method == "POST":
-        form = GastoForm(request.POST, instance=tx, user=request.user)
-        if "categoria" in form.fields:
-            del form.fields["categoria"]
-        if form.is_valid():
-            form.save()
-            messages.success(request, "✅ Transacción actualizada correctamente.")
-            return redirect("perfil")
-    else:
-        form = GastoForm(instance=tx, user=request.user)
-        if "categoria" in form.fields:
-            del form.fields["categoria"]
-
-    return render(
-        request,
-        "economia/nueva_transaccion.html",
-        {"form": form, "modo_edicion": True, "tx": tx},
-    )
 
 
 
@@ -1010,3 +1014,68 @@ def tarifas_json(request):
     """
     data = {t.user_id: float(t.precio) for t in TarifaHora.objects.all()}
     return JsonResponse(data)
+
+# economia/views.py
+from django.contrib.auth.decorators import login_required, permission_required
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from proyectos.models import HoraTrabajo
+
+
+@login_required
+@permission_required('economia.view_dashboard', raise_exception=True)
+def horas_registros_modal(request):
+    """
+    Devuelve la tabla HTML con los registros de horas filtrados por
+    usuario, proyecto (0 = sin proyecto), mes y año.
+    Muestra **todas** las horas cargadas, sin importar el estado.
+    """
+    user_q = (request.GET.get("user") or "").strip()
+    pid_q  = (request.GET.get("proyecto_id") or "").strip()
+
+    try:
+        month = int(request.GET.get("month") or 0)
+    except ValueError:
+        month = 0
+    try:
+        year = int(request.GET.get("year") or 0)
+    except ValueError:
+        year = 0
+
+    qs = (HoraTrabajo.objects
+          .select_related("proyecto", "tarea", "usuario"))
+
+    # Filtrar por usuario
+    if user_q:
+        qs = qs.filter(usuario__username__iexact=user_q)
+
+    # Filtrar por proyecto (0 = sin proyecto)
+    try:
+        pid = int(pid_q)
+    except (TypeError, ValueError):
+        pid = None
+    if pid is not None:
+        if pid == 0:
+            qs = qs.filter(proyecto__isnull=True)
+        else:
+            qs = qs.filter(proyecto_id=pid)
+
+    # Filtro por mes/año
+    if month:
+        qs = qs.filter(fecha__month=month)
+    if year:
+        qs = qs.filter(fecha__year=year)
+
+    # Orden lógico
+    qs = qs.order_by("fecha", "id")
+
+    # Render parcial reutilizando tabla del perfil
+    html = render_to_string(
+        "proyectos/_horas_registros_table.html",
+        {"rows": qs, "month": month, "year": year},
+        request=request,
+    )
+    return HttpResponse(html)
+
+
+

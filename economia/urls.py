@@ -23,4 +23,6 @@ urlpatterns = [
     path("tarifas/modal/", views.tarifas_modal, name="tarifas_modal"),
     path("tarifas/guardar/", views.tarifas_guardar, name="tarifas_guardar"),
     path("tarifas/json/", views.tarifas_json, name="tarifas_json"),
+    
+    path("horas/registros-modal/", views.horas_registros_modal, name="horas_registros_modal"),
 ]

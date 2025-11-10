@@ -1,0 +1,28 @@
+{% if rows %}
+  <table class="subtabla">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Horas</th>
+        <th>Proyecto/Área</th>
+        <th>Tarea</th>
+        <th>Estado</th>
+        <th>Descripción</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for h in rows %}
+      <tr>
+        <td>{{ h.fecha|date:"d/m/Y" }}</td>
+        <td>{{ h.horas }}</td>
+        <td>{{ h.proyecto.nombre|default:"—" }}</td>
+        <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
+        <td>{{ h.get_estado_display }}</td>
+        <td>{{ h.descripcion|default:"" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p style="margin:6px 0">No hay registros para este usuario/proyecto.</p>
+{% endif %}
