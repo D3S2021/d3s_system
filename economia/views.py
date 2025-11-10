@@ -376,6 +376,12 @@ from django.http import JsonResponse
 from proyectos.models import Proyecto  # 👈 importar proyectos para el select
 
 from django.http import JsonResponse
+from django.urls import reverse
+from django.utils.timezone import now
+from django.db import transaction
+
+# Asegurate de tener este import donde ya lo usás en el rechazo
+from notificaciones.models import Notificacion
 
 @login_required
 @permission_required("economia.can_validate_transactions", raise_exception=True)
@@ -418,7 +424,7 @@ def transacciones_pendientes(request):
                         proyecto = Proyecto.objects.get(pk=int(proj_raw))
                     except Proyecto.DoesNotExist:
                         proyecto = None  # lo ignoramos si no existe
-                
+
                 efectivo_flag = bool(request.POST.get("efectivo"))
 
                 # Guardar aprobación
@@ -428,7 +434,29 @@ def transacciones_pendientes(request):
                 tx.validado_por = request.user
                 tx.validado_en  = now()
                 tx.es_efectivo  = efectivo_flag
-                tx.save(update_fields=["categoria", "proyecto", "estado", "validado_por", "validado_en","es_efectivo"])
+                tx.save(update_fields=[
+                    "categoria", "proyecto", "estado", "validado_por", "validado_en", "es_efectivo"
+                ])
+
+                # 🔔 Notificación de APROBACIÓN (simple, sin comentario)
+                if tx.usuario_id:
+                    titulo = f"TU TRANSACCIÓN DE ${tx.monto:,.2f} FUE APROBADA"
+                    cuerpo = (
+                        f"Monto: ${tx.monto:,.2f}\n"
+                        f"Fecha: {tx.fecha:%Y-%m-%d}\n"
+                        f"Categoría: {tx.categoria.nombre if tx.categoria_id else '—'}"
+                    )
+                    if proyecto:
+                        cuerpo += f"\nProyecto: {proyecto.nombre}"
+
+                    notif = Notificacion.objects.create(
+                        user=tx.usuario,
+                        titulo=titulo,
+                        cuerpo=cuerpo,
+                        url=""
+                    )
+                    notif.url = reverse("notificaciones:detalle", args=[notif.id])
+                    notif.save(update_fields=["url"])
 
                 if is_ajax:
                     return JsonResponse({"ok": True})
@@ -436,7 +464,7 @@ def transacciones_pendientes(request):
                 return redirect("economia:pendientes")
 
             elif accion == "rechazar":
-                comentario = (request.POST.get("comentario") or "").strip()
+                comentario = (request.POST.get("comentario") or "").trim()
                 if not comentario:
                     msg = "Debés indicar un motivo de rechazo."
                     return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
@@ -451,8 +479,10 @@ def transacciones_pendientes(request):
                         notif.save(update_fields=["url"])
 
                     if getattr(tx, "comprobante", None):
-                        try: tx.comprobante.delete(save=False)
-                        except Exception: pass
+                        try:
+                            tx.comprobante.delete(save=False)
+                        except Exception:
+                            pass
 
                     tx.delete()
 
