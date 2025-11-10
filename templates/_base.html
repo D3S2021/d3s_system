@@ -66,6 +66,14 @@
     .msg-error{background:#fdecea;color:#b71c1c;border-color:#f5c6cb}
     .msg-warning{background:#fff8e1;color:#8a6d3b;border-color:#ffeeba}
     .msg-ok{background:#e8f5e9;color:#256029;border-color:#c3e6cb}
+
+    /* ===== Botón ADMIN ===== */
+    .admin-pill{
+      display:inline-block; background:#dc2626; color:#fff; font-weight:800;
+      border-radius:9999px; padding:4px 10px; font-size:12px; text-decoration:none;
+      line-height:1; border:1px solid rgba(0,0,0,.12);
+    }
+    .admin-pill:hover{ background:#b91c1c; color:#fff; text-decoration:none; }
   </style>
 </head>
 <body>
@@ -120,6 +128,16 @@
             <a href="{% url 'perfil' %}" class="user-name" id="userNameText">
               {{ request.user.get_full_name|default:request.user.username }}
             </a>
+
+            {# Botón ADMIN solo para usuarios staff #}
+            {% if request.user.is_staff %}
+              <a href="{% url 'admin:index' %}" 
+                title="Panel de administración" 
+                style="font-size:18px; color:#fff; text-decoration:none; margin-left:6px;">
+                ⚙️
+              </a>
+            {% endif %}
+
             <button class="user-caret" id="userCaret" type="button" aria-label="Abrir menú" title="Abrir menú">▾</button>
 
             <div class="user-dd" id="userDropdown">
@@ -340,3 +358,4 @@
   </script>
 </body>
 </html>
+```
