@@ -1,6 +1,9 @@
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+import os, mimetypes
+from uuid import uuid4
+from django.utils.text import slugify
 
 User = settings.AUTH_USER_MODEL
 
@@ -33,10 +36,8 @@ class Proyecto(models.Model):
     fecha_inicio = models.DateField(null=True, blank=True)
     fecha_fin = models.DateField(null=True, blank=True)
 
-    # Presupuesto base y flag de cierre con facturación incompleta
     presupuesto_total = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
-    # Archivo de presupuesto (PDF)
     presupuesto_pdf = models.FileField(
         upload_to="proyectos/presupuestos/%Y/%m/",
         null=True,
@@ -84,29 +85,23 @@ class Tarea(models.Model):
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name="tareas")
     titulo = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True)
-    # 🔧 fix: max_length correcto, sin hacks
     estado = models.CharField(max_length=10, choices=ESTADOS, default="todo")
     prioridad = models.CharField(max_length=10, choices=PRIORIDADES, default="media")
 
-    # ===== NUEVO (mínimo): permitir múltiples asignados sin romper lo actual =====
     asignados = models.ManyToManyField(
         User, blank=True, related_name="tareas_asignadas_m2m"
     )
-    # Mantengo el FK existente para compatibilidad (lo migraremos después si querés)
     asignado_a = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name="tareas_asignadas"
     )
-    # ============================================================================
-    # Acceso unificado (útil mientras conviven ambos campos):
+
     @property
     def asignados_effective(self):
-        """Lista de usuarios asignados incluyendo el viejo FK si existe y no está en el M2M."""
         ids = set(self.asignados.values_list("id", flat=True))
         out = list(self.asignados.all())
         if self.asignado_a_id and self.asignado_a_id not in ids and self.asignado_a:
             out.append(self.asignado_a)
         return out
-    # ============================================================================
 
     vence_el = models.DateField(null=True, blank=True)
     estimacion_horas = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
@@ -158,6 +153,50 @@ class Adjunto(models.Model):
         return f"Adjunto {self.archivo.name}"
 
 
+# --------- NUEVO: Adjuntos del Proyecto ---------
+def proyecto_upload_to(instance, filename: str) -> str:
+    base, ext = os.path.splitext(filename)
+    safe = slugify(base)[:60] or "archivo"
+    return f"proyectos/{instance.proyecto_id or 'tmp'}/{uuid4().hex}_{safe}{ext.lower()}"
+
+class AdjuntoProyecto(models.Model):
+    proyecto      = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name="adjuntos")
+    archivo       = models.FileField(upload_to=proyecto_upload_to)
+    alias         = models.CharField(max_length=200, blank=True) 
+    descripcion   = models.CharField(max_length=200, blank=True)
+    original_name = models.CharField(max_length=200, blank=True)
+    content_type  = models.CharField(max_length=120, blank=True)
+    size_bytes    = models.PositiveIntegerField(default=0)
+    subido_por    = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    subido_en     = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-subido_en"]
+
+    def save(self, *args, **kwargs):
+        if self.archivo and not self.original_name:
+            self.original_name = os.path.basename(self.archivo.name)
+        if self.archivo and hasattr(self.archivo, "size"):
+            self.size_bytes = int(self.archivo.size or 0)
+        if not self.content_type and self.original_name:
+            self.content_type = mimetypes.guess_type(self.original_name)[0] or ""
+        super().save(*args, **kwargs)
+
+    def filename(self):
+        return os.path.basename(self.archivo.name)
+
+    def size_human(self):
+        n = float(self.size_bytes or 0)
+        for u in ["B","KB","MB","GB","TB"]:
+            if n < 1024.0:
+                return f"{n:,.0f}{u}".replace(",", ".")
+            n /= 1024.0
+        return f"{n:.1f}PB"
+
+    def __str__(self):
+        return f"{self.proyecto} · {self.original_name or self.filename()}"
+
+
 # --------- Historial del Proyecto ---------
 class HistorialProyecto(models.Model):
     TIPO = [
@@ -190,7 +229,6 @@ class FacturaProyecto(models.Model):
         ("aprobada", "Aprobada"),
         ("pend_acreditacion", "Pendiente de acreditación"),
         ("acreditada", "Acreditada"),
-        # "rechazada" no persiste: se elimina y queda la traza en historial
     ]
     proyecto = models.ForeignKey(Proyecto, on_delete=models.CASCADE, related_name="facturas")
     numero = models.CharField(max_length=50)
@@ -240,8 +278,7 @@ class HoraTrabajo(models.Model):
     )
 
     fecha = models.DateField(default=timezone.now)
-    # Guardamos solo la cantidad (el formulario calcula a partir de inicio/fin)
-    horas = models.DecimalField(max_digits=5, decimal_places=2)  # ej. 0.25, 1.50, 8.00
+    horas = models.DecimalField(max_digits=5, decimal_places=2)
     descripcion = models.TextField(blank=True)
     es_facturable = models.BooleanField(default=False)
 

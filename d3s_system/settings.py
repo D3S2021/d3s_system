@@ -131,3 +131,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # ====== Default PK ======
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+WHATSAPP_GRAPH_VERSION = "v20.0"               # opcional, por si querés cambiarla fácil
+WHATSAPP_TEST_TO = "+5493413192442"            # REEMPLAZAR por tu número de prueba en E.164

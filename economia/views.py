@@ -464,7 +464,7 @@ def transacciones_pendientes(request):
                 return redirect("economia:pendientes")
 
             elif accion == "rechazar":
-                comentario = (request.POST.get("comentario") or "").trim()
+                comentario = (request.POST.get("comentario") or "").strip()
                 if not comentario:
                     msg = "Debés indicar un motivo de rechazo."
                     return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)

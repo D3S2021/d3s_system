@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 
 from .models import (
     Proyecto, Tarea, Comentario, Adjunto,
-    FacturaProyecto, HoraTrabajo
+    FacturaProyecto, HoraTrabajo, AdjuntoProyecto  # ⬅️ agregado
 )
 
 User = get_user_model()
@@ -394,3 +394,31 @@ class HoraTrabajoForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+# ===========================
+# ADJUNTOS DE PROYECTO
+# ===========================
+# proyectos/forms.py
+from django import forms
+from .models import AdjuntoProyecto
+
+
+class AdjuntoProyectoForm(forms.ModelForm):
+    class Meta:
+        model = AdjuntoProyecto
+        fields = ["archivo", "alias", "descripcion"]
+
+    def clean_archivo(self):
+        archivo = self.cleaned_data.get("archivo")
+
+        if not archivo:
+            raise forms.ValidationError("Tenés que seleccionar un archivo.")
+
+        # 👇 IMPORTANTE: no validamos extensión ni content_type
+        # Si querés podrías dejar un límite de tamaño, por ejemplo:
+        # max_mb = 50
+        # if archivo.size > max_mb * 1024 * 1024:
+        #     raise forms.ValidationError(f"El archivo no puede superar los {max_mb} MB.")
+
+        return archivo

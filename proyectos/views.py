@@ -1224,3 +1224,75 @@ def tarea_open(request, pk: int):
     _ = get_object_or_404(_qs_permitidos(request), pk=tarea.proyecto_id)
     url = reverse("proyectos:detalle", args=[tarea.proyecto_id]) + f"?open_task={tarea.id}"
     return redirect(url)
+
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
+from django.db.models import Q  # si no lo usás en este archivo, podés borrar este import
+
+from .models import Proyecto, AdjuntoProyecto
+from .forms import AdjuntoProyectoForm
+
+
+def _puede_gestionar_archivos(user, proyecto: Proyecto) -> bool:
+    if not user.is_authenticated:
+        return False
+    if user.has_perm("proyectos.can_manage_proyectos"):
+        return True
+    # responsable o miembro del proyecto
+    if proyecto.responsable_id == user.id:
+        return True
+    return proyecto.miembros.filter(id=user.id).exists()
+
+
+@login_required
+def proyecto_archivo_subir(request, pk):
+    proyecto = get_object_or_404(Proyecto, pk=pk)
+
+    if not _puede_gestionar_archivos(request.user, proyecto):
+        messages.error(request, "No tenés permisos para subir archivos en este proyecto.")
+        return redirect(reverse("proyectos:detalle", args=[pk]) + "#archivos")
+
+    if request.method == "POST":
+        form = AdjuntoProyectoForm(request.POST, request.FILES)
+        if form.is_valid():
+            adj = form.save(commit=False)
+            adj.proyecto = proyecto           # 👈 se asocia siempre al proyecto actual
+            adj.subido_por = request.user     # 👈 se guarda quién lo subió
+            # opcional: aseguramos el nombre original (si el form no lo setea)
+            if not adj.original_name and adj.archivo:
+                adj.original_name = adj.archivo.name
+            adj.save()
+            messages.success(request, "Archivo subido correctamente.")
+        else:
+            # guardamos errores en mensajes para mostrarlos en el detalle
+            for field, errs in form.errors.items():
+                for e in errs:
+                    messages.error(request, f"{field}: {e}")
+
+    return redirect(reverse("proyectos:detalle", args=[pk]) + "#archivos")
+
+
+@login_required
+def proyecto_archivo_eliminar(request, pk, adjunto_id):
+    proyecto = get_object_or_404(Proyecto, pk=pk)
+    adj = get_object_or_404(AdjuntoProyecto, pk=adjunto_id, proyecto=proyecto)
+
+    if not _puede_gestionar_archivos(request.user, proyecto):
+        messages.error(request, "No tenés permisos para eliminar archivos en este proyecto.")
+        return redirect(reverse("proyectos:detalle", args=[pk]) + "#archivos")
+
+    if request.method == "POST":
+        # borramos el file del storage y el registro
+        try:
+            if adj.archivo:
+                adj.archivo.delete(save=False)
+        except Exception:
+            # si falla el delete físico, igual borramos el registro
+            pass
+        adj.delete()
+        messages.success(request, "Archivo eliminado.")
+
+    return redirect(reverse("proyectos:detalle", args=[pk]) + "#archivos")

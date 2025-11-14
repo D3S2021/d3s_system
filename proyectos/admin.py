@@ -32,3 +32,13 @@ class HoraTrabajoAdmin(admin.ModelAdmin):
     list_display = ("usuario", "fecha", "horas", "proyecto", "tarea", "estado", "es_facturable")
     list_filter = ("estado", "es_facturable", "fecha", "proyecto")
     search_fields = ("usuario__username", "usuario__first_name", "usuario__last_name", "descripcion")
+
+
+from django.contrib import admin
+from .models import AdjuntoProyecto
+
+@admin.register(AdjuntoProyecto)
+class AdjuntoProyectoAdmin(admin.ModelAdmin):
+    list_display = ("proyecto", "archivo", "subido_por", "subido_en")
+    list_filter = ("proyecto", "subido_en")
+    search_fields = ("proyecto__nombre", "archivo", "descripcion")

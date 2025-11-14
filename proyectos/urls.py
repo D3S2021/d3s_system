@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 app_name = "proyectos"
 
@@ -22,6 +24,8 @@ urlpatterns = [
     path("<int:pk>/reabrir/", views.proyecto_reabrir, name="reabrir"),
     path("proyecto/<int:pk>/estado/", views.proyecto_cambiar_estado, name="proyecto_cambiar_estado"),
     path("tareas/<int:pk>/tomar/", views.tomar_tarea, name="tarea_tomar"),
+    path("<int:pk>/archivos/subir/", views.proyecto_archivo_subir, name="archivo_subir"),
+    path("<int:pk>/archivos/<int:adjunto_id>/eliminar/", views.proyecto_archivo_eliminar, name="archivo_eliminar"),
 
     # API para duplicar:
     path("api/<int:pk>/", views.proyecto_api_json, name="api_proyecto"),
@@ -50,4 +54,4 @@ urlpatterns = [
     path("tareas/open/<int:pk>/", views.tarea_open, name="tarea_open"),
 
 
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

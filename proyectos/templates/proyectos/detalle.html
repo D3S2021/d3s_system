@@ -98,6 +98,132 @@
   .pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}
   .pill.ok{background:#ecfdf5;color:#065f46}
   .pill.bad{background:#fef2f2;color:#991b1b}
+
+  /* ===== Toast global de mensajes (usa <ul class="messagelist"> del base) ===== */
+  .messagelist{
+    position:fixed;
+    top:18px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:2000;
+    margin:0;
+    padding:0;
+    list-style:none;
+  }
+  .messagelist li{
+    margin:0;
+    padding:10px 16px;
+    border-radius:999px;
+    background:#ecfdf5;
+    color:#065f46;
+    border:1px solid #bbf7d0;
+    box-shadow:0 10px 25px rgba(15,23,42,.12);
+    font-size:14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    white-space:nowrap;
+  }
+  .messagelist li.error{
+    background:#fef2f2;
+    color:#991b1b;
+    border-color:#fecaca;
+  }
+  .messagelist li.warning{
+    background:#fffbeb;
+    color:#92400e;
+    border-color:#fed7aa;
+  }
+  .messagelist li.info{
+    background:#eff6ff;
+    color:#1d4ed8;
+    border-color:#bfdbfe;
+  }
+
+  /* ===== Archivos del proyecto ===== */
+  .files-section{margin-top:24px;}
+  .files-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+  }
+  .files-card{
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:10px;
+    padding:14px 16px;
+    box-shadow:0 1px 2px rgba(15,23,42,.04);
+  }
+
+  .file-upload-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    margin-bottom:12px;
+  }
+  .file-upload-row input[type="file"]{
+    font-size:14px;
+  }
+  .file-upload-row input[type="text"]{
+    flex:1;
+    min-width:180px;
+    border:1px solid #cbd5e1;
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:14px;
+  }
+  .file-upload-row button.default{
+    padding:8px 14px;
+    border-radius:8px;
+    border:1px solid #2563eb;
+    background:#2563eb;
+    color:#fff;
+    cursor:pointer;
+    font-size:14px;
+  }
+  .file-upload-row button.default:hover{
+    background:#1d4ed8;
+    border-color:#1d4ed8;
+  }
+
+  .file-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  .file-table th,
+  .file-table td{
+    padding:6px 8px;
+    border-bottom:1px solid #e5e7eb;
+  }
+  .file-table th{
+    font-size:12px;
+    font-weight:600;
+    color:#64748b;
+    background:#f9fafb;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .file-name-link{
+    color:#2563eb;
+    text-decoration:none;
+  }
+  .file-name-link:hover{
+    text-decoration:underline;
+  }
+  .files-empty{
+    margin:4px 0;
+    color:#64748b;
+    font-size:14px;
+  }
+  .deletelink{
+    border-radius:6px;
+    padding:4px 8px;
+    font-size:12px;
+  }
+
 </style>
 {% endblock %}
 
@@ -262,10 +388,96 @@
     </table>
   </div>
 </div>
+
+<section id="archivos" class="files-section">
+  <div class="files-header">
+    <h3 style="margin:0;">Archivos del proyecto</h3>
+  </div>
+
+  <div class="files-card">
+    {# Formulario de subida #}
+    {% if request.user.is_authenticated and perms.proyectos.can_manage_proyectos or proyecto.responsable == request.user or request.user in proyecto.miembros.all %}
+      <form action="{% url 'proyectos:archivo_subir' proyecto.id %}"
+            method="post" enctype="multipart/form-data"
+            class="file-upload-row">
+        {% csrf_token %}
+        <input type="file" name="archivo" required>
+        <input type="text" name="alias" placeholder="Alias visible (opcional)">
+        <input type="text" name="descripcion" placeholder="Descripción (opcional)">
+        <button type="submit" class="default">Subir</button>
+      </form>
+    {% endif %}
+
+    {# Lista de archivos #}
+    {% with adjuntos=proyecto.adjuntos.all %}
+      {% if adjuntos %}
+        <table class="file-table">
+          <thead>
+            <tr>
+              <th>Archivo</th>
+              <th>Descripción</th>
+              <th style="width:120px; text-align:center;">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for a in adjuntos %}
+              <tr>
+                <td>
+                  <a href="{{ a.archivo.url }}" target="_blank" rel="noopener" class="file-name-link">
+                    {{ a.alias|default:a.filename }}
+                  </a>
+                </td>
+
+                <td>{{ a.descripcion|default:"—" }}</td>
+
+                <td style="text-align:center;">
+                  <a href="{{ a.archivo.url }}" download>Descargar</a>
+
+                  {% if request.user.is_authenticated and perms.proyectos.can_manage_proyectos or proyecto.responsable == request.user or request.user in proyecto.miembros.all %}
+                    |
+                    <form action="{% url 'proyectos:archivo_eliminar' proyecto.id a.id %}"
+                          method="post" style="display:inline;">
+                      {% csrf_token %}
+                      <button type="submit"
+                              onclick="return confirm('¿Eliminar este archivo de forma permanente?');"
+                              style="background:none;border:0;color:#dc2626;cursor:pointer;padding:0;margin:0;font-size:13px;">
+                          Eliminar
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+      {% else %}
+        <p class="files-empty">Sin archivos aún.</p>
+      {% endif %}
+    {% endwith %}
+  </div>
+</section>
+
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
+// Toast para mensajes globales (ul.messagelist)
+document.addEventListener('DOMContentLoaded', () => {
+  const ml = document.querySelector('.messagelist');
+  if (!ml) return;
+  ml.style.transition = 'opacity .4s ease, transform .4s ease';
+  setTimeout(() => {
+    ml.style.opacity = '0';
+    ml.style.transform = 'translate(-50%, -10px)';
+  }, 3500);
+  setTimeout(() => {
+    if (ml && ml.parentNode) ml.parentNode.removeChild(ml);
+  }, 4200);
+});
+
 (function(){
   /* ===== Helpers ===== */
   function addModalFlag(url){ return url.includes('?') ? url + '&modal=1' : url + '?modal=1'; }
@@ -459,7 +671,6 @@
       `).join('');
     }
 
-
     renderChips();
     sel?.addEventListener('change', renderChips);
 
@@ -601,126 +812,111 @@
     if (kpiEco) kpiEco.textContent = money(gastosEco);
 
     /// --- Punto 6: precargar tarifas por usuario desde economía ---
-const tarifasURL = "{% url 'economia:tarifas_json' %}";
+    const tarifasURL = "{% url 'economia:tarifas_json' %}";
 
-// helper para escribir la tarifa aunque no haya <input>
-function setTarifaEnFila(tr, valor){
-  const inp = tr.querySelector('.inp-tarifa');
-  if (inp) {
-    inp.value = valor;               // si hay input, lo rellenamos
-  } else {
-    // si no hay input, buscamos un contenedor de texto; si no existe, lo creamos
-    let span = tr.querySelector('.tarifa-valor');
-    if (!span) {
-      span = document.createElement('span');
-      span.className = 'tarifa-valor';
-      const td = tr.querySelector('td:nth-child(3)') || tr.children[2]; // 3ra columna
-      if (td) { td.textContent = ''; td.appendChild(span); }
-    }
-    span.textContent = Number(valor || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
-  }
-}
-
-fetch(tarifasURL, { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
-  .then(r => r.ok ? r.json() : ({}))
-  .then(data => {
-    // soporto ambos formatos:
-    // 1) { "3": 10000, "5": 8000, ... }
-    // 2) { tarifas: [{user_id: 3, tarifa_hora: 10000}, ...] }
-    let map = Object.create(null);
-
-    if (data && Array.isArray(data.tarifas)) {
-      data.tarifas.forEach(t => { map[String(t.user_id)] = +t.tarifa_hora || 0; });
-    } else if (data && typeof data === 'object') {
-      Object.keys(data).forEach(k => { map[String(k)] = +data[k] || 0; });
-    }
-
-    // escribir en cada fila
-    tabla.querySelectorAll('tbody tr').forEach(tr => {
-      const uid = String(tr.getAttribute('data-user-id') || '');
-      if (uid && Object.prototype.hasOwnProperty.call(map, uid)) {
-        setTarifaEnFila(tr, map[uid]);
+    function setTarifaEnFila(tr, valor){
+      const inp = tr.querySelector('.inp-tarifa');
+      if (inp) {
+        inp.value = valor;
+      } else {
+        let span = tr.querySelector('.tarifa-valor');
+        if (!span) {
+          span = document.createElement('span');
+          span.className = 'tarifa-valor';
+          const td = tr.querySelector('td:nth-child(3)') || tr.children[2];
+          if (td) { td.textContent = ''; td.appendChild(span); }
+        }
+        span.textContent = Number(valor || 0).toLocaleString('es-AR', { minimumFractionDigits:2, maximumFractionDigits:2 });
       }
-    });
+    }
 
-    recalcular(); // recalcular con las tarifas precargadas
-  })
-  .catch(() => { recalcular(); });
+    fetch(tarifasURL, { headers:{'X-Requested-With':'XMLHttpRequest'}, cache:'no-store' })
+      .then(r => r.ok ? r.json() : ({}))
+      .then(data => {
+        let map = Object.create(null);
 
+        if (data && Array.isArray(data.tarifas)) {
+          data.tarifas.forEach(t => { map[String(t.user_id)] = +t.tarifa_hora || 0; });
+        } else if (data && typeof data === 'object') {
+          Object.keys(data).forEach(k => { map[String(k)] = +data[k] || 0; });
+        }
+
+        tabla.querySelectorAll('tbody tr').forEach(tr => {
+          const uid = String(tr.getAttribute('data-user-id') || '');
+          if (uid && Object.prototype.hasOwnProperty.call(map, uid)) {
+            setTarifaEnFila(tr, map[uid]);
+          }
+        });
+
+        recalcular();
+      })
+      .catch(() => { recalcular(); });
 
     function recalcular(){
-  // --- formateo sin decimales
-  const money0 = (n) => {
-    n = isFinite(+n) ? +n : 0;
-    return n.toLocaleString('es-AR', { maximumFractionDigits: 0 });
-  };
+      const money0 = (n) => {
+        n = isFinite(+n) ? +n : 0;
+        return n.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+      };
 
-  // --- helpers de parseo (acepta "10.000,00", "10000.00", etc.)
-  const parseLat = (v) => {
-    const s = String(v ?? '0')
-      .replace(/\s/g, '')
-      .replace(/\./g, '')   // miles
-      .replace(',', '.');   // decimal
-    const n = parseFloat(s);
-    return isFinite(n) ? n : 0;
-  };
+      const parseLat = (v) => {
+        const s = String(v ?? '0')
+          .replace(/\s/g, '')
+          .replace(/\./g, '')
+          .replace(',', '.');
+        const n = parseFloat(s);
+        return isFinite(n) ? n : 0;
+      };
 
-  // presupuesto y gastos desde data-* (normalizados)
-  const presupuestoNum = parseLat(tabla.dataset.presupuesto);
-  const gastosEcoNum   = parseLat(tabla.dataset.gastos);
+      const presupuestoNum = parseLat(tabla.dataset.presupuesto);
+      const gastosEcoNum   = parseLat(tabla.dataset.gastos);
 
-  let costoHoras = 0;
+      let costoHoras = 0;
 
-  tabla.querySelectorAll('tbody tr').forEach(tr => {
-    // horas pueden venir como "1,0"
-    const h = parseLat(tr.querySelector('.h-usuario')?.textContent || '0');
+      tabla.querySelectorAll('tbody tr').forEach(tr => {
+        const h = parseLat(tr.querySelector('.h-usuario')?.textContent || '0');
 
-    // tarifa: input o span.tarifa-valor
-    let tarifa = 0;
-    const inp  = tr.querySelector('.inp-tarifa');
-    if (inp){
-      tarifa = parseLat(inp.value);
-    }else{
-      const span = tr.querySelector('.tarifa-valor');
-      tarifa = parseLat(span?.textContent || '0');
-      if (span) span.textContent = money0(tarifa);
+        let tarifa = 0;
+        const inp  = tr.querySelector('.inp-tarifa');
+        if (inp){
+          tarifa = parseLat(inp.value);
+        }else{
+          const span = tr.querySelector('.tarifa-valor');
+          tarifa = parseLat(span?.textContent || '0');
+          if (span) span.textContent = money0(tarifa);
+        }
+
+        const costo = h * tarifa;
+        const costoEl = tr.querySelector('.costo-usuario');
+        if (costoEl) costoEl.textContent = money0(costo);
+
+        costoHoras += costo;
+      });
+
+      const totalCostoEl = contEl.querySelector('#totalCosto');
+      if (totalCostoEl) totalCostoEl.textContent = money0(costoHoras);
+
+      const gastosEcoEl = contEl.querySelector('#totalGastosEconomia');
+      if (gastosEcoEl) gastosEcoEl.textContent = money0(gastosEcoNum);
+
+      const totalGastos = costoHoras + gastosEcoNum;
+      const kpiTotal = contEl.querySelector('#kpiTotalGastos');
+      if (kpiTotal) kpiTotal.textContent = money0(totalGastos);
+
+      const badge = contEl.querySelector('#badgeComparacion');
+      if (!presupuestoNum){
+        badge.className = 'pill';
+        badge.textContent = 'Sin presupuesto';
+      } else {
+        const diff = presupuestoNum - totalGastos;
+        if (diff >= 0){
+          badge.className = 'pill ok';
+          badge.textContent = `OK · Ganancia $ ${money0(diff)}`;
+        } else {
+          badge.className = 'pill bad';
+          badge.textContent = `Perdemos $ ${money0(Math.abs(diff))}`;
+        }
+      }
     }
-
-    const costo = h * tarifa;
-    const costoEl = tr.querySelector('.costo-usuario');
-    if (costoEl) costoEl.textContent = money0(costo);
-
-    costoHoras += costo;
-  });
-
-  // totales
-  const totalCostoEl = contEl.querySelector('#totalCosto');
-  if (totalCostoEl) totalCostoEl.textContent = money0(costoHoras);
-
-  const gastosEcoEl = contEl.querySelector('#totalGastosEconomia');
-  if (gastosEcoEl) gastosEcoEl.textContent = money0(gastosEcoNum);
-
-  const totalGastos = costoHoras + gastosEcoNum;
-  const kpiTotal = contEl.querySelector('#kpiTotalGastos');
-  if (kpiTotal) kpiTotal.textContent = money0(totalGastos);
-
-  // comparador con presupuesto
-  const badge = contEl.querySelector('#badgeComparacion');
-  if (!presupuestoNum){
-    badge.className = 'pill';
-    badge.textContent = 'Sin presupuesto';
-  } else {
-    const diff = presupuestoNum - totalGastos;
-    if (diff >= 0){
-      badge.className = 'pill ok';
-      badge.textContent = `OK · Ganancia $ ${money0(diff)}`;
-    } else {
-      badge.className = 'pill bad';
-      badge.textContent = `Perdemos $ ${money0(Math.abs(diff))}`;
-    }
-  }
-}
-
 
     tabla.addEventListener('input', (e)=>{
       if (e.target.matches('.inp-tarifa')) recalcular();
