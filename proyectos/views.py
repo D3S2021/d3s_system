@@ -1126,13 +1126,29 @@ def horas_nueva(request):
 
     else:
         initial = {}
+
+        # Preselección de proyecto si vino en la URL
         if preselect_proyecto_id:
             try:
                 initial["proyecto"] = int(preselect_proyecto_id)
             except (TypeError, ValueError):
                 pass
 
-        if not puede_asignar:
+        # 👇 NUEVO: preseleccionar usuario
+        if puede_asignar:
+            # Intentamos tomar un usuario desde la URL (?usuario=ID) para el "perfil abierto"
+            preselect_usuario_id = request.GET.get("usuario")
+            if preselect_usuario_id:
+                try:
+                    initial["usuario"] = int(preselect_usuario_id)
+                except (TypeError, ValueError):
+                    # si viene mal, usamos al propio usuario logueado
+                    initial["usuario"] = request.user.pk
+            else:
+                # si no vino nada, también usamos al usuario logueado
+                initial["usuario"] = request.user.pk
+        else:
+            # si NO puede asignar, siempre él mismo
             initial["usuario"] = request.user.pk
 
         form = HoraTrabajoForm(

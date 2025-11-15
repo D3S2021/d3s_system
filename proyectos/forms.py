@@ -341,25 +341,37 @@ class HoraTrabajoForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        # 👉 mismos argumentos que ya venías usando
         self._request_user = kwargs.pop("request_user", None)
         self._puede_asignar = kwargs.pop("puede_asignar", False)
         super().__init__(*args, **kwargs)
 
-        # ===== Usuario =====
+        # =========================================================
+        # 🔴 MARCAR TODOS LOS CAMPOS COMO OBLIGATORIOS POR DEFECTO
+        # =========================================================
+        for name, field in self.fields.items():
+            field.required = True
+
+        # =========================================================
+        # 🔵 AJUSTES ESPECIALES PARA "usuario"
+        # =========================================================
         if self._puede_asignar:
-            # MARTÍN (admin / líder) puede elegir a otro
-            self.fields["usuario"].queryset = User.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
-            self.fields["usuario"].required = True
+            # puede elegir a cualquier usuario
+            self.fields["usuario"].queryset = User.objects.filter(
+                is_active=True
+            ).order_by("first_name", "last_name", "username")
         else:
-            # BENJAMÍN (solo carga lo suyo) → oculto y forzado al request.user
-            self.fields["usuario"].queryset = User.objects.filter(pk=getattr(self._request_user, "pk", None))
+            # sólo puede cargar sus propias horas → campo oculto
+            self.fields["usuario"].queryset = User.objects.filter(
+                pk=getattr(self._request_user, "pk", None)
+            )
             self.fields["usuario"].widget = forms.HiddenInput()
-            self.fields["usuario"].required = False
+            self.fields["usuario"].required = False  # obligatorio no aplica aquí
             if self._request_user:
                 self.initial["usuario"] = self._request_user.pk
 
-        # ===== Proyectos visibles =====
+        # =========================================================
+        # 🔵 PROYECTO — obligatorio SIEMPRE
+        # =========================================================
         u = self._request_user
         if u and u.has_perm("proyectos.can_manage_proyectos"):
             qs = Proyecto.objects.filter(is_archivado=False)
@@ -368,19 +380,29 @@ class HoraTrabajoForm(forms.ModelForm):
                 Q(is_archivado=False) &
                 (Q(responsable=u) | Q(miembros=u))
             ).distinct()
+
         self.fields["proyecto"].queryset = qs.order_by("nombre")
+        self.fields["proyecto"].empty_label = "Seleccioná un proyecto"
+
+        # =========================================================
+        # 🔵 DESCRIPCIÓN — obligatorio SIEMPRE
+        # =========================================================
+        self.fields["descripcion"].widget.attrs.setdefault(
+            "placeholder", "Describí brevemente qué hiciste"
+        )
 
     def clean(self):
         cleaned = super().clean()
 
-        # Fuerza el usuario si NO puede asignar a otros (evita manipulación del POST)
+        # Si no puede asignar a otro usuario → siempre se usa el request.user
         if not self._puede_asignar:
             if not self._request_user:
-                raise forms.ValidationError("No se pudo determinar el usuario de la sesión.")
+                raise forms.ValidationError("No se pudo determinar el usuario.")
             cleaned["usuario"] = self._request_user
 
         # Validación de horarios
-        inicio, fin = cleaned.get("inicio"), cleaned.get("fin")
+        inicio = cleaned.get("inicio")
+        fin = cleaned.get("fin")
         if inicio and fin and inicio >= fin:
             raise forms.ValidationError("La hora de inicio debe ser anterior a la de fin.")
 
@@ -388,9 +410,10 @@ class HoraTrabajoForm(forms.ModelForm):
 
     def save(self, commit=True):
         obj = super().save(commit=False)
-        # Refuerzo defensivo: si no puede asignar, siempre se guarda con el request_user
+
         if not self._puede_asignar and self._request_user:
             obj.usuario = self._request_user
+
         if commit:
             obj.save()
         return obj
