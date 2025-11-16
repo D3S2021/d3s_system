@@ -222,6 +222,38 @@
     border-color:#2563eb;
     color:#fff;
   }
+
+    .horas-header{
+    margin-top:28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .horas-filter{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    font-size:14px;
+  }
+  .horas-filter label{
+    display:flex;
+    align-items:center;
+    gap:4px;
+  }
+  .btn-sm-horas{
+    display:inline-block;
+    padding:6px 10px;
+    border:1px solid #d0d7de;
+    border-radius:8px;
+    background:#fff;
+    cursor:pointer;
+  }
+  .btn-sm-horas:hover{ background:#f8fafc; }
+
+
 </style>
 {% endblock %}
 
@@ -493,8 +525,39 @@
   <p>No tenés tareas asignadas.</p>
 {% endif %}
 
+{% now "Y" as current_year %}
+<div class="horas-header">
+  <h2 style="margin:0;">Mis horas</h2>
 
-<h2 style="margin-top:28px">Mis horas</h2>
+  <form method="get" class="horas-filter">
+    <label>
+      <span>Mes:</span>
+      <input type="number"
+             name="mes"
+             min="1"
+             max="12"
+             value="{{ mes }}"
+             style="width:70px;">
+    </label>
+
+    <label>
+      <span>Año:</span>
+      <input type="number"
+            name="anio"
+            min="2020"
+            max="{{ anio_max }}"
+            value="{{ anio_str }}"            
+            style="width:90px;">
+    </label>
+
+    <button type="submit" class="btn-sm-horas">Filtrar</button>
+
+    <span style="font-weight:600; margin-left:4px;">
+      Total del mes: {{ total_mes|default:0|floatformat:2 }} h
+    </span>
+  </form>
+</div>
+
 
 {% if mis_horas_grouped %}
   <table class="perfil-horas">

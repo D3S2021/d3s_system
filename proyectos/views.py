@@ -1170,27 +1170,91 @@ def horas_nueva(request):
         {"form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar},
     )
 
+from datetime import date
+import calendar
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Max, Count, Value, CharField
+from django.db.models.functions import Coalesce
+
+from .models import HoraTrabajo
+
+# Podés dejar esto al principio del archivo
+MESES = [
+    (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
+    (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
+    (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre"),
+]
+
 
 @login_required
 def horas_mias(request):
-    qs = (HoraTrabajo.objects
-          .select_related("proyecto", "tarea")
-          .filter(usuario=request.user))
+    hoy = date.today()
 
+    # ----- leer mes/año desde GET (default = mes y año actual) -----
+    try:
+        mes = int(request.GET.get("mes") or hoy.month)
+    except (TypeError, ValueError):
+        mes = hoy.month
+
+    try:
+        anio = int(request.GET.get("anio") or hoy.year)
+    except (TypeError, ValueError):
+        anio = hoy.year
+
+    # Saneamos un poco los valores
+    if mes < 1 or mes > 12:
+        mes = hoy.month
+    if anio < 2020 or anio > hoy.year + 1:
+        anio = hoy.year
+
+    # ----- rango de fechas del mes seleccionado -----
+    primer_dia = date(anio, mes, 1)
+    ultimo_dia = date(anio, mes, calendar.monthrange(anio, mes)[1])
+
+    # ----- horas del usuario en ese mes -----
+    qs = (
+        HoraTrabajo.objects
+        .select_related("proyecto", "tarea")
+        .filter(
+            usuario=request.user,
+            fecha__range=(primer_dia, ultimo_dia),
+        )
+    )
+
+    # total de horas del mes (para mostrar al lado del filtro)
+    total_mes = qs.aggregate(
+        total_horas=Coalesce(Sum("horas"), 0.0)
+    )["total_horas"]
+
+    # agrupado por proyecto / área (como ya lo tenías)
     agrupado = (
         qs.annotate(
             grupo_nombre=Coalesce("proyecto__nombre", Value("—"), output_field=CharField()),
             pid=Coalesce("proyecto_id", Value(0)),
         )
         .values("pid", "grupo_nombre")
-        .annotate(total_horas=Sum("horas"), ultima=Max("fecha"), n_reg=Count("id"))
+        .annotate(
+            total_horas=Sum("horas"),
+            ultima=Max("fecha"),
+            n_reg=Count("id"),
+        )
         .order_by("-ultima", "grupo_nombre")
     )
 
-    return render(request, "proyectos/horas_mias.html", {
-        "titulo": "Mis horas",
-        "agrupado": agrupado,
-    })
+    return render(
+        request,
+        "proyectos/horas_mias.html",
+        {
+            "titulo": "Mis horas",
+            "agrupado": agrupado,
+            "mes": mes,
+            "anio": anio,
+            "meses": MESES,
+            "total_mes": total_mes,
+            "anio_max": hoy.year + 1,
+        },
+    )
 
 
 @login_required

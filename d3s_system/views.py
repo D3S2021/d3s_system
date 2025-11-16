@@ -13,6 +13,8 @@ from django.template.loader import render_to_string
 from economia.models import Transaccion
 from proyectos.models import HoraTrabajo, Proyecto, Tarea
 
+from datetime import date
+import calendar
 
 
 
@@ -24,6 +26,13 @@ def logout_then_login(request):
     """Cierra la sesión actual y redirige al login."""
     logout(request)
     return redirect("login")
+
+
+MESES = [
+    (1, "Enero"), (2, "Febrero"), (3, "Marzo"), (4, "Abril"),
+    (5, "Mayo"), (6, "Junio"), (7, "Julio"), (8, "Agosto"),
+    (9, "Septiembre"), (10, "Octubre"), (11, "Noviembre"), (12, "Diciembre"),
+]
 
 
 # ------------------------------------------------------------
@@ -50,18 +59,43 @@ def perfil_usuario(request):
         .order_by("-fecha", "-id")
     )
 
-    # Horas (lista plana para renderizar los detalles inline)
-    mis_horas = (
+    hoy = date.today()
+
+    try:
+        mes = int(request.GET.get("mes") or hoy.month)
+    except (TypeError, ValueError):
+        mes = hoy.month
+
+    try:
+        anio = int(request.GET.get("anio") or hoy.year)
+    except (TypeError, ValueError):
+        anio = hoy.year
+
+    if mes < 1 or mes > 12:
+        mes = hoy.month
+    if anio < 2020 or anio > hoy.year + 1:
+        anio = hoy.year
+
+    primer_dia = date(anio, mes, 1)
+    ultimo_dia = date(anio, mes, calendar.monthrange(anio, mes)[1])
+
+    # ========= HORAS (filtradas por mes/año) =========
+    horas_qs = (
         HoraTrabajo.objects
         .select_related("proyecto", "tarea")
-        .filter(usuario=user)
+        .filter(
+            usuario=user,
+            fecha__range=(primer_dia, ultimo_dia),
+        )
         .order_by("-fecha", "-id")
     )
 
-    # Agrupado por proyecto/área
+    # Lista plana para detalle inline
+    mis_horas = horas_qs
+
+    # Agrupado por proyecto/área (igual que antes, pero sobre horas_qs)
     mis_horas_grouped = (
-        HoraTrabajo.objects
-        .filter(usuario=user)
+        horas_qs
         .values(pid=Coalesce(F("proyecto_id"), Value(0)))
         .annotate(
             grupo_nombre=Coalesce(F("proyecto__nombre"), Value("—")),
@@ -75,6 +109,15 @@ def perfil_usuario(request):
         )
         .order_by("grupo_nombre")
     )
+
+    # Total de horas del mes (para mostrar al lado del filtro)
+    total_mes = horas_qs.aggregate(
+        total_horas=Coalesce(
+            Sum("horas"),
+            Value(0.0),
+            output_field=DecimalField(max_digits=10, decimal_places=2),
+        )
+    )["total_horas"]
 
     # Contador de proyectos asignados (responsable o miembro) no archivados
     proyectos_asignados = (
@@ -119,6 +162,14 @@ def perfil_usuario(request):
             "mis_horas_grouped": mis_horas_grouped,
             "proyectos_asignados": proyectos_asignados,
             "tareas_asignadas": tareas_asignadas,
+
+            # 🔹 Estos son los que usa el filtro y el total
+            "mes": mes,
+            "anio": anio,
+            "anio_str": str(anio),
+            "meses": MESES,      # aunque ahora no uses el select, no molesta
+            "anio_max": hoy.year + 1,
+            "total_mes": total_mes,
         },
     )
 
