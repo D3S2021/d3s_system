@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.conf import settings
 from .models import WhatsAppConfig, WhatsAppTemplate, WhatsAppMessageLog
-from .services import send_whatsapp_template
+#from .services import send_whatsapp_template
 
 @admin.register(WhatsAppConfig)
 class WhatsAppConfigAdmin(admin.ModelAdmin):
