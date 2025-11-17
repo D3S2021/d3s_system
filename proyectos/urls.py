@@ -42,6 +42,9 @@ urlpatterns = [
     # Horas
     path("horas/nueva/", views.horas_nueva, name="horas_nueva"),
     path("horas/mias/", views.horas_mias, name="horas_mias"),
+    path("horas/<int:pk>/editar/", views.horas_editar, name="horas_editar"),
+    path("horas/<int:pk>/eliminar/", views.horas_eliminar, name="horas_eliminar"),
+
 
     # ⬇️ ESTA ES LA QUE TE DABA ERROR: debe apuntar a horas_economia_list
     path("horas/economia/", views.horas_economia_list, name="horas_economia"),

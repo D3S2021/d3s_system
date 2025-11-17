@@ -1,54 +1,84 @@
 {# templates/proyectos/_cards_nav.html #}
 <style>
-  .cards-row{
+  .cards-nav{
     display:grid;
-    grid-template-columns:repeat(6,1fr); /* 6 tarjetas: vencimientos + 4 estados + todos */
-    gap:12px;
-    margin-bottom:16px
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:16px;
+    margin-bottom:18px;
   }
-  .card-link{
-    display:block;border:1px solid #e5e5e5;border-radius:10px;background:#fff;
-    padding:16px;text-decoration:none;color:inherit
+  .cards-nav-link{
+    display:block;
+    text-decoration:none;
+    color:inherit;
   }
-  .card-link h3{margin:0 0 8px;font-size:14px;color:#555}
-  .card-link .num{font-size:34px;font-weight:700;color:#1a73e8;line-height:1}
-  .card-link.active{outline:2px solid #1a73e8;background:#f6faff}
+  .cards-nav-card{
+    border-radius:14px;
+    padding:14px 18px;
+    background:#ffffff;
+    border:1px solid #e5e7eb;
+    box-shadow:0 1px 3px rgba(15,23,42,.06);
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+  }
+  .cards-nav-card:hover{
+    transform:translateY(-1px);
+    box-shadow:0 10px 20px rgba(15,23,42,.08);
+    border-color:#cbd5f5;
+    background:#f9fafb;
+  }
+  .cards-nav-card.is-active{
+    border-color:#2563eb;
+    box-shadow:0 10px 25px rgba(37,99,235,.18);
+    background:linear-gradient(135deg,#eff6ff,#ffffff);
+  }
+  .cards-nav-title{
+    font-weight:700;
+    font-size:15px;
+    color:#0f172a;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .cards-nav-pill{
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    padding:2px 7px;
+    border-radius:999px;
+    background:#e5edff;
+    color:#1d4ed8;
+  }
+  .cards-nav-desc{
+    font-size:13px;
+    color:#6b7280;
+  }
 </style>
 
-<div class="cards-row">
-  <a class="card-link {% if current_tab == 'vencimientos' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=vencimientos">
-    <h3>Próximos vencimientos</h3>
-    <div class="num">{{ counts.vencimientos|default:"0" }}</div>
+<div class="cards-nav">
+  {# TAB: TODOS LOS PROYECTOS #}
+  <a href="?tab=proyectos" class="cards-nav-link">
+    <div class="cards-nav-card {% if current_tab == 'proyectos' or not current_tab %}is-active{% endif %}">
+      <div class="cards-nav-title">
+        Proyectos
+      </div>
+      <div class="cards-nav-desc">
+        Listado visual de proyectos, agrupados por estado (planificados, en progreso, finalizados).
+      </div>
+    </div>
   </a>
 
-  <a class="card-link {% if current_tab == 'planificados' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=planificados">
-    <h3>Planificados</h3>
-    <div class="num">{{ counts.planificados|default:"0" }}</div>
-  </a>
-
-  <a class="card-link {% if current_tab == 'presupuestados' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=presupuestados">
-    <h3>Presupuestados</h3>
-    <div class="num">{{ counts.presupuestados|default:"0" }}</div>
-  </a>
-
-  <a class="card-link {% if current_tab == 'en_progreso' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=en_progreso">
-    <h3>En progreso</h3>
-    <div class="num">{{ counts.en_progreso|default:"0" }}</div>
-  </a>
-
-  <a class="card-link {% if current_tab == 'finalizados' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=finalizados">
-    <h3>Finalizados</h3>
-    <div class="num">{{ counts.finalizados|default:"0" }}</div>
-  </a>
-
-  <a class="card-link {% if current_tab == 'todos' %}active{% endif %}"
-     href="{% url 'proyectos:dashboard' %}?tab=todos">
-    <h3>Todos los proyectos</h3>
-    <div class="num">→</div>
+  {# TAB: PRÓXIMOS VENCIMIENTOS #}
+  <a href="?tab=vencimientos" class="cards-nav-link">
+    <div class="cards-nav-card {% if current_tab == 'vencimientos' %}is-active{% endif %}">
+      <div class="cards-nav-title">
+        Próximos vencimientos
+      </div>
+      <div class="cards-nav-desc">
+        Tareas con fecha más próxima de cada proyecto para priorizar el trabajo.
+      </div>
+    </div>
   </a>
 </div>

@@ -90,37 +90,44 @@ def _puede_tocar_proyecto(user, proyecto: Proyecto) -> bool:
 # ===========================
 @login_required
 def dashboard(request):
-    tab = request.GET.get("tab", "vencimientos")
-    ctx = {"counts": _counts(), "current_tab": tab}
+    # 👉 Ahora la pestaña por defecto es "proyectos"
+    tab = request.GET.get("tab") or "proyectos"
+
+    ctx = {
+        "counts": _counts(),
+        "current_tab": tab,
+    }
     ctx["proyectos_existentes"] = Proyecto.objects.order_by("-creado_en")[:200]
 
+    # QS base para proyectos no archivados
+    base_qs = Proyecto.objects.filter(is_archivado=False)
+
     if tab == "planificados":
-        ctx["items"] = Proyecto.objects.filter(
-            estado="planificado", is_archivado=False
-        ).order_by("-creado_en")
+        ctx["items"] = base_qs.filter(
+            estado="planificado"
+        ).order_by("estado", "-creado_en")
 
     elif tab == "presupuestados":
-        ctx["items"] = Proyecto.objects.filter(
-            estado="presupuestado", is_archivado=False
-        ).order_by("-creado_en")
+        ctx["items"] = base_qs.filter(
+            estado="presupuestado"
+        ).order_by("estado", "-creado_en")
 
     elif tab == "en_progreso":
-        ctx["items"] = Proyecto.objects.filter(
-            estado="en_progreso", is_archivado=False
-        ).order_by("-creado_en")
+        ctx["items"] = base_qs.filter(
+            estado="en_progreso"
+        ).order_by("estado", "-creado_en")
 
     elif tab == "finalizados":
-        ctx["items"] = Proyecto.objects.filter(
-            estado="finalizado", is_archivado=False
-        ).order_by("-creado_en")
+        ctx["items"] = base_qs.filter(
+            estado="finalizado"
+        ).order_by("estado", "-creado_en")
 
-    elif tab == "todos":
-        ctx["items"] = Proyecto.objects.filter(
-            is_archivado=False
-        ).order_by("-creado_en")
+    # 👉 Vista principal: todos los proyectos (tab=proyectos) o tab=todos
+    elif tab in ("proyectos", "todos"):
+        ctx["items"] = base_qs.order_by("estado", "-creado_en", "nombre")
 
-    else:
-        # Tab "vencimientos": agrupamos tareas con fecha de vencimiento por proyecto
+    # 👉 Próximos vencimientos (misma lógica que ya tenías en el else)
+    elif tab == "vencimientos":
         from itertools import groupby
 
         qs = (
@@ -128,13 +135,24 @@ def dashboard(request):
             .select_related("proyecto", "proyecto__responsable")
             .prefetch_related("asignados")
             .filter(proyecto__is_archivado=False, vence_el__isnull=False)
-            # >>> clave: ordenar por TODA la clave usada en groupby
-            .order_by("proyecto__nombre", "proyecto_id", "proyecto__fecha_fin", "vence_el", "id")
+            # clave completa usada en groupby
+            .order_by(
+                "proyecto__nombre",
+                "proyecto_id",
+                "proyecto__fecha_fin",
+                "vence_el",
+                "id",
+            )
         )
 
         grupos = []
         for (pid, pnombre, _), tareas in groupby(
-            qs, key=lambda t: (t.proyecto_id, t.proyecto.nombre, t.proyecto.fecha_fin)
+            qs,
+            key=lambda t: (
+                t.proyecto_id,
+                t.proyecto.nombre,
+                t.proyecto.fecha_fin,
+            ),
         ):
             tareas = list(tareas)
             grupos.append({
@@ -145,6 +163,10 @@ def dashboard(request):
 
         ctx["vencimientos_grouped"] = grupos
         ctx["hoy"] = now().date()
+
+    # 👉 Por si llega algún tab raro: caemos en la vista principal
+    else:
+        ctx["items"] = base_qs.order_by("estado", "-creado_en", "nombre")
 
     return render(request, "proyectos/dashboard.html", ctx)
 
@@ -1169,6 +1191,109 @@ def horas_nueva(request):
         "proyectos/horas_form.html",
         {"form": form, "titulo": "Cargar horas", "puede_asignar": puede_asignar},
     )
+
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_POST
+from .models import HoraTrabajo
+from .forms import HoraTrabajoForm
+
+@login_required
+def horas_editar(request, pk):
+    hora = get_object_or_404(HoraTrabajo, pk=pk, usuario=request.user)
+
+    puede_asignar = (
+        request.user.has_perm("proyectos.can_manage_proyectos") or request.user.is_staff
+    )
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+
+    if request.method == "POST":
+        data = request.POST.copy()
+
+        if not puede_asignar:
+            data["usuario"] = str(request.user.pk)
+
+        form = HoraTrabajoForm(
+            data,
+            instance=hora,
+            request_user=request.user,
+            puede_asignar=puede_asignar,
+        )
+
+        if form.is_valid():
+            obj = form.save(commit=False)
+
+            # Cálculo de horas igual que en horas_nueva
+            inicio = form.cleaned_data.get("inicio")
+            fin = form.cleaned_data.get("fin")
+
+            if inicio and fin:
+                ini_dt = datetime.combine(date.today(), inicio)
+                fin_dt = datetime.combine(date.today(), fin)
+                delta_h = (fin_dt - ini_dt).total_seconds() / 3600.0
+
+                if delta_h <= 0:
+                    form.add_error(None, "La hora de fin debe ser posterior a la de inicio.")
+                else:
+                    obj.horas = round(delta_h, 2)
+
+            if form.errors or obj.horas is None:
+                if is_ajax:
+                    html = render_to_string(
+                        "proyectos/_horas_form.html",
+                        {"form": form, "obj": hora, "puede_asignar": puede_asignar},
+                        request=request,
+                    )
+                    return JsonResponse({"ok": False, "html": html}, status=400)
+
+            obj.save()
+
+            if is_ajax:
+                return JsonResponse({"ok": True})
+
+            return redirect("proyectos:horas_mias")
+
+        # Si hay errores y es AJAX → devolver html parcial
+        if is_ajax:
+            html = render_to_string(
+                "proyectos/_horas_form.html",
+                {"form": form, "obj": hora, "puede_asignar": puede_asignar},
+                request=request,
+            )
+            return JsonResponse({"ok": False, "html": html}, status=400)
+
+    else:
+        # GET: precargar formulario
+        form = HoraTrabajoForm(
+            instance=hora,
+            request_user=request.user,
+            puede_asignar=puede_asignar,
+        )
+
+        # AJAX: devolver SOLO el partial
+        if is_ajax or request.GET.get("modal") == "1":
+            return render(
+                request,
+                "proyectos/_horas_form.html",
+                {"form": form, "obj": hora, "puede_asignar": puede_asignar},
+            )
+
+    # Fallback si no es AJAX
+    return render(
+        request,
+        "proyectos/horas_form.html",
+        {"form": form, "titulo": "Editar horas", "obj": hora, "puede_asignar": puede_asignar},
+    )
+
+@login_required
+@require_POST
+def horas_eliminar(request, pk):
+    hora = get_object_or_404(HoraTrabajo, pk=pk, usuario=request.user)
+    hora.delete()
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    return redirect("perfil_usuario")
+
 
 from datetime import date
 import calendar

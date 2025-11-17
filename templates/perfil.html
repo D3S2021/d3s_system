@@ -223,7 +223,7 @@
     color:#fff;
   }
 
-    .horas-header{
+  .horas-header{
     margin-top:28px;
     display:flex;
     align-items:center;
@@ -252,8 +252,6 @@
     cursor:pointer;
   }
   .btn-sm-horas:hover{ background:#f8fafc; }
-
-
 </style>
 {% endblock %}
 
@@ -558,7 +556,6 @@
   </form>
 </div>
 
-
 {% if mis_horas_grouped %}
   <table class="perfil-horas">
     <thead>
@@ -592,9 +589,8 @@
                   <th>Fecha</th>
                   <th>Horas</th>
                   <th>Proyecto/Área</th>
-                  <th>Tarea</th>
-                  <th>Estado</th>
                   <th>Descripción</th>
+                  <th>Acciones</th>  {# NUEVO #}
                 </tr>
               </thead>
               <tbody>
@@ -605,9 +601,21 @@
                       <td>{{ h.fecha|date:"d/m/Y" }}</td>
                       <td>{{ h.horas }}</td>
                       <td>{{ h.proyecto.nombre|default:"—" }}</td>
-                      <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
-                      <td>{{ h.get_estado_display }}</td>
                       <td>{{ h.descripcion|default:"" }}</td>
+                      <td>
+                        {# >>> CAMBIO SOLO AQUÍ: agrego ?modal=1 en la URL #}
+                        <button type="button"
+                                class="btn-link js-edit-hora"
+                                data-url="{% url 'proyectos:horas_editar' h.id %}?modal=1">
+                          Editar
+                        </button>
+                        |
+                        <button type="button"
+                                class="btn-link js-delete-hora"
+                                data-url="{% url 'proyectos:horas_eliminar' h.id %}">
+                          Eliminar
+                        </button>
+                      </td>
                     </tr>
                   {% endif %}
                 {% endwith %}
@@ -621,7 +629,17 @@
   </table>
 {% elif mis_horas %}
   <table class="perfil-horas">
-    <thead><tr><th>Fecha</th><th>Horas</th><th>Proyecto/Area</th><th>Tarea</th><th>Estado</th><th>Descripción</th></tr></thead>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Horas</th>
+        <th>Proyecto/Area</th>
+        <th>Tarea</th>
+        <th>Estado</th>
+        <th>Descripción</th>
+        <th>Acciones</th>  {# NUEVO #}
+      </tr>
+    </thead>
     <tbody>
       {% for h in mis_horas %}
         <tr>
@@ -631,6 +649,20 @@
           <td>{% if h.tarea %}{{ h.tarea.titulo }}{% else %}—{% endif %}</td>
           <td>{{ h.get_estado_display }}</td>
           <td>{{ h.descripcion|default:"" }}</td>
+          <td>
+            {# >>> Y AQUÍ TAMBIÉN: ?modal=1 #}
+            <button type="button"
+                    class="btn-link js-edit-hora"
+                    data-url="{% url 'proyectos:horas_editar' h.id %}?modal=1">
+              Editar
+            </button>
+            |
+            <button type="button"
+                    class="btn-link js-delete-hora"
+                    data-url="{% url 'proyectos:horas_eliminar' h.id %}">
+              Eliminar
+            </button>
+          </td>
         </tr>
       {% endfor %}
     </tbody>
@@ -776,29 +808,36 @@ document.addEventListener('click', function(e){
   });
 })();
 
-/* ===== Modal “Cargar horas” (AJAX) ===== */
+/* ===== Modal “Cargar horas” (AJAX) + editar/eliminar ===== */
 (function(){
   const URL_HORAS = "{% url 'proyectos:horas_nueva' %}";
-  const btnOpen = document.getElementById('btnCargarHoras');
-  const overlay = document.getElementById('modalHoras');
-  const btnClose = document.getElementById('closeModalHoras');
+  const btnOpen   = document.getElementById('btnCargarHoras');
+  const overlay   = document.getElementById('modalHoras');
+  const btnClose  = document.getElementById('closeModalHoras');
   const container = document.getElementById('modalHorasContainer');
 
-  function openModal(){
+  function openModal(url){
+    const target = url || URL_HORAS;
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
     container.innerHTML = '<p style="margin:0;color:#666">Cargando formulario…</p>';
-    fetch(URL_HORAS, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
+
+    const finalUrl = target + (target.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+
+    fetch(finalUrl, {headers: {'X-Requested-With':'XMLHttpRequest'}, cache:'no-store'})
       .then(r => r.text())
       .then(html => { container.innerHTML = html; attachFormHandler(); })
       .catch(() => { container.innerHTML = '<p style="color:#a00">No se pudo cargar el formulario.</p>'; });
   }
-  function closeModal(){ overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true'); }
+  function closeModal(){
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden','true');
+  }
 
   function attachFormHandler(){
-    const form = container.querySelector('#formHoras');
+    const form      = container.querySelector('#formHoras');
     const btnCancel = container.querySelector('#btnCancelarHoras');
-    const btnHoy = container.querySelector('#btnHoy');
+    const btnHoy    = container.querySelector('#btnHoy');
 
     if (btnCancel) btnCancel.addEventListener('click', closeModal);
     if (btnHoy) {
@@ -834,10 +873,11 @@ document.addEventListener('click', function(e){
         return false;
       }
 
-      // Enviar por AJAX robusto
+      // Enviar por AJAX robusto (creación o edición)
       e.preventDefault();
       const formData = new FormData(form);
-      const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken') || '';
+      const csrf = form.querySelector('input[name=csrfmiddlewaretoken]')?.value
+                   || getCookie('csrftoken') || '';
 
       try{
         const r = await fetch(form.action, {
@@ -884,10 +924,55 @@ document.addEventListener('click', function(e){
     });
   }
 
-  if (btnOpen) btnOpen.addEventListener('click', openModal);
+  // Abrir modal para NUEVA hora
+  if (btnOpen) btnOpen.addEventListener('click', function(){ openModal(URL_HORAS); });
+
   btnClose.addEventListener('click', closeModal);
   overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+  // Delegación para EDITAR / ELIMINAR desde las tablas
+  document.addEventListener('click', async function(e){
+    const btnEdit = e.target.closest('.js-edit-hora');
+    if (btnEdit){
+      e.preventDefault();
+      let url = btnEdit.getAttribute('data-url') || '';
+      // 👉 Aseguramos que siempre tenga modal=1 por si algún día se cambia el data-url
+      if (url && !/modal=1/.test(url)){
+        url += (url.includes('?') ? '&' : '?') + 'modal=1';
+      }
+      if (url) openModal(url);
+      return;
+    }
+
+    const btnDel = e.target.closest('.js-delete-hora');
+    if (btnDel){
+      e.preventDefault();
+      const url = btnDel.getAttribute('data-url');
+      if (!url) return;
+      if (!confirm('¿Eliminar este registro de horas?')) return;
+
+      try{
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With':'XMLHttpRequest',
+            'X-CSRFToken': getCookie('csrftoken') || ''
+          },
+          credentials: 'same-origin'
+        });
+        const data = await r.json().catch(()=>null);
+        if (data && data.ok){
+          location.reload();
+        } else {
+          alert('No se pudo eliminar el registro de horas.');
+        }
+      }catch(err){
+        console.error(err);
+        alert('Error de red al eliminar.');
+      }
+    }
+  });
 })();
 
 /* Acciones Empezar/Terminada desde las cards (ya lo tenías) */

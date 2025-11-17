@@ -278,7 +278,13 @@ class HoraTrabajo(models.Model):
     )
 
     fecha = models.DateField(default=timezone.now)
-    horas = models.DecimalField(max_digits=5, decimal_places=2)
+    inicio = models.TimeField(  # <-- NUEVO si no lo tenías
+        null=True, blank=True
+    )
+    fin = models.TimeField(     # <-- NUEVO si no lo tenías
+        null=True, blank=True
+    )
+    horas = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     descripcion = models.TextField(blank=True)
     es_facturable = models.BooleanField(default=False)
 

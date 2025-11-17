@@ -321,6 +321,16 @@ from django.db.models import Q
 from .models import HoraTrabajo, Proyecto
 
 class HoraTrabajoForm(forms.ModelForm):
+    # 👉 Campo fecha con formato compatible con <input type="date">
+    fecha = forms.DateField(
+        label="Fecha",
+        widget=forms.DateInput(
+            attrs={"type": "date"},
+            format="%Y-%m-%d",
+        ),
+        input_formats=["%Y-%m-%d"],
+    )
+    
     inicio = forms.TimeField(
         label="Inicio",
         input_formats=["%H:%M"],
@@ -345,6 +355,33 @@ class HoraTrabajoForm(forms.ModelForm):
         self._puede_asignar = kwargs.pop("puede_asignar", False)
         super().__init__(*args, **kwargs)
 
+                # ========= NUEVO: precargar fecha / inicio / fin al EDITAR =========
+        # (solo cuando hay instancia: horas_editar)
+        if self.instance and self.instance.pk:
+            # --- FECHA ---
+            fecha_inst = getattr(self.instance, "fecha", None)
+            if fecha_inst and not self.is_bound:
+                # aseguramos initial tanto en el form como en el field
+                self.initial.setdefault("fecha", fecha_inst)
+                self.fields["fecha"].initial = fecha_inst
+
+            # Estas dos líneas funcionan si tu modelo HoraTrabajo
+            # tiene campos TimeField llamados "inicio" y "fin"
+            if hasattr(self.instance, "inicio") and self.instance.inicio and "inicio" not in self.initial:
+                self.initial["inicio"] = self.instance.inicio
+
+            if hasattr(self.instance, "fin") and self.instance.fin and "fin" not in self.initial:
+                self.initial["fin"] = self.instance.fin
+
+
+            # Estas dos líneas funcionan si tu modelo HoraTrabajo
+            # tiene campos TimeField llamados "inicio" y "fin"
+            if hasattr(self.instance, "inicio") and self.instance.inicio and "inicio" not in self.initial:
+                self.initial["inicio"] = self.instance.inicio
+
+            if hasattr(self.instance, "fin") and self.instance.fin and "fin" not in self.initial:
+                self.initial["fin"] = self.instance.fin
+
         # =========================================================
         # 🔴 MARCAR TODOS LOS CAMPOS COMO OBLIGATORIOS POR DEFECTO
         # =========================================================
@@ -365,7 +402,7 @@ class HoraTrabajoForm(forms.ModelForm):
                 pk=getattr(self._request_user, "pk", None)
             )
             self.fields["usuario"].widget = forms.HiddenInput()
-            self.fields["usuario"].required = False  # obligatorio no aplica aquí
+            self.fields["usuario"].required = False
             if self._request_user:
                 self.initial["usuario"] = self._request_user.pk
 

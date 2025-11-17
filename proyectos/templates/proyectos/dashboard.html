@@ -83,39 +83,188 @@
     {% else %}
       <p style="color:#64748b">No hay tareas con fecha de vencimiento.</p>
     {% endif %}
+    
   {% else %}
-    {# ============== otras pestañas: listado simple de proyectos ============== #}
-    <table class="tabla" style="width:100%;border-collapse:collapse;margin-top:6px">
-      <thead>
-        <tr>
-          <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Nombre</th>
-          <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Descripción</th>
-          <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Responsable</th>
-          <th style="text-align:left;padding:8px;border-bottom:1px solid #eee">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% if items %}
-          {% for p in items %}
-            <tr>
-              <td style="padding:8px;border-bottom:1px solid #f3f3f3">{{ p.nombre }}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f3f3">{{ p.descripcion|truncatechars:120 }}</td>
-              <td style="padding:8px;border-bottom:1px solid #f3f3f3">
-                {% if p.responsable %}
-                  {{ p.responsable.get_full_name|default:p.responsable.username }}
-                {% else %}—{% endif %}
-              </td>
-              <td style="padding:8px;border-bottom:1px solid #f3f3f3">
-                <a href="{% url 'proyectos:detalle' p.id %}">Ver</a>
-              </td>
-            </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="4" style="padding:10px;color:#666">No hay proyectos en esta sección.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
+    {# ============== TODOS LOS PROYECTOS – VISTA KANBAN DE CARDS AGRUPADAS POR ESTADO ============== #}
+    <style>
+      .proj-section{
+        margin-top:18px;
+      }
+      .proj-section-header{
+        display:flex;
+        align-items:center;
+        gap:8px;
+        margin:0 0 6px;
+      }
+      .proj-section-title{
+        margin:0;
+        font-size:15px;
+        font-weight:700;
+        color:#111827;
+      }
+      .proj-section-pill{
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:.04em;
+        padding:2px 7px;
+        border-radius:999px;
+        background:#e5e7eb;
+        color:#4b5563;
+      }
+      .proj-grid{
+        display:grid;
+        grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+        gap:14px;
+        margin-top:8px;
+        padding:4px 2px 6px;
+        border-radius:10px;
+        transition:background .15s ease, box-shadow .15s ease;
+      }
+      /* Resaltado cuando se arrastra encima */
+      .proj-grid.is-drop-target{
+        background:#eff6ff;
+        box-shadow:0 0 0 1px #bfdbfe inset;
+      }
+      .proj-card{
+        border-radius:12px;
+        border:1px solid #e5e7eb;
+        background:#ffffff;
+        padding:14px 15px 12px;
+        box-shadow:0 1px 3px rgba(15,23,42,.06);
+        display:flex;
+        flex-direction:column;
+        gap:6px;
+        transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+        cursor:grab;
+      }
+      .proj-card:active{ cursor:grabbing; }
+      .proj-card:hover{
+        transform:translateY(-2px);
+        box-shadow:0 10px 20px rgba(15,23,42,.08);
+        border-color:#cbd5f5;
+        background:#f9fafb;
+      }
+      .proj-name{
+        font-weight:700;
+        font-size:15px;
+        color:#0f172a;
+        margin-bottom:2px;
+      }
+      .proj-desc{
+        font-size:13px;
+        color:#6b7280;
+        min-height:32px;
+      }
+      .proj-meta{
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        font-size:12px;
+        color:#6b7280;
+        margin-top:4px;
+      }
+      .proj-resp{
+        max-width:60%;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+      }
+      .proj-chip-estado{
+        font-size:11px;
+        font-weight:600;
+        padding:2px 8px;
+        border-radius:999px;
+        background:#e5e7eb;
+        color:#374151;
+        text-transform:uppercase;
+        letter-spacing:.04em;
+      }
+      .proj-actions{
+        margin-top:8px;
+        display:flex;
+        justify-content:flex-end;
+      }
+      .proj-btn-ver{
+        border-radius:999px;
+        border:1px solid #2563eb;
+        background:#2563eb;
+        color:#ffffff !important;
+        font-size:12px;
+        font-weight:600;
+        padding:6px 16px;
+        text-decoration:none;
+        cursor:pointer;
+        transition:background .12s ease, border-color .12s ease, transform .08s ease;
+      }
+      .proj-btn-ver:hover{
+        background:#1d4ed8;
+        border-color:#1d4ed8;
+        transform:translateY(-1px);
+        color:#ffffff !important;
+      }
+    </style>
+
+    {% if items %}
+      {% with items|dictsort:"estado" as items_sorted %}
+        {% regroup items_sorted by estado as proyectos_grouped %}
+
+        {% for group in proyectos_grouped %}
+          <section class="proj-section" data-estado-proy="{{ group.grouper }}">
+            <div class="proj-section-header">
+              <h3 class="proj-section-title">
+                {% with group.list.0 as p0 %}
+                  {{ p0.get_estado_display|default:"Sin estado" }}
+                {% endwith %}
+              </h3>
+              <span class="proj-section-pill">
+                {{ group.list|length }} proyecto{{ group.list|length|pluralize:"s" }}
+              </span>
+            </div>
+
+            <div class="proj-grid"
+                 data-drop-estado="{{ group.grouper }}"
+                 ondragover="projAllowDrop(event)"
+                 ondragenter="projDragEnter(event)"
+                 ondragleave="projDragLeave(event)"
+                 ondrop="projDropOnEstado(event)">
+              {% for p in group.list %}
+                <article class="proj-card"
+                         draggable="true"
+                         data-proyecto="{{ p.id }}"
+                         ondragstart="projDrag(event)"
+                         ondragend="projDragEnd(event)">
+                  <div class="proj-name">{{ p.nombre }}</div>
+                  <div class="proj-desc">
+                    {{ p.descripcion|default:"Sin descripción"|truncatechars:120 }}
+                  </div>
+
+                  <div class="proj-meta">
+                    <span class="proj-resp">
+                      {% if p.responsable %}
+                        {{ p.responsable.get_full_name|default:p.responsable.username }}
+                      {% else %}Sin responsable{% endif %}
+                    </span>
+                    <span class="proj-chip-estado">
+                      {{ p.get_estado_display|default:"—" }}
+                    </span>
+                  </div>
+
+                  <div class="proj-actions">
+                    <a href="{% url 'proyectos:detalle' p.id %}" class="proj-btn-ver">
+                      Ver proyecto →
+                    </a>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          </section>
+        {% endfor %}
+      {% endwith %}
+    {% else %}
+      <p style="padding:10px;color:#666">No hay proyectos en esta sección.</p>
+    {% endif %}
   {% endif %}
+
 
   {% if perms.proyectos.can_manage_proyectos %}
     <div id="modalProyecto" class="modal-overlay" aria-hidden="true">
@@ -151,8 +300,15 @@
     (function(){
       // URLs desde Django
       const NUEVO_PROY_URL = "{% url 'proyectos:nuevo' %}";
+      const URL_CAMBIAR_ESTADO = "{% url 'proyectos:proyecto_cambiar_estado' 0 %}";
 
       const $ = (sel, ctx=document) => ctx.querySelector(sel);
+
+      // ----- helper CSRF para drag & drop -----
+      function getCookie(name){
+        const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+        return m ? m.pop() : '';
+      }
 
       // ----- Modal general de tareas -----
       const modalGeneral = $("#modalGeneral");
@@ -301,6 +457,94 @@
           .catch(() => alert('Error de red al guardar.'));
         });
       }
+
+      // ===== DRAG & DROP DE PROYECTOS (KANBAN) =====
+            // ===== DRAG & DROP DE PROYECTOS (KANBAN) =====
+      let draggedProyectoId = null;
+
+      // Actualiza el texto "X proyectos" de la sección
+      function updateSectionCount(section){
+        if (!section) return;
+        const grid = section.querySelector('.proj-grid');
+        const pill = section.querySelector('.proj-section-pill');
+        if (!grid || !pill) return;
+        const n = grid.querySelectorAll('.proj-card').length;
+        pill.textContent = `${n} proyecto${n === 1 ? '' : 's'}`;
+      }
+
+      // Actualiza el chip de estado dentro de la card
+      function updateCardEstadoChip(card, targetSection){
+        const chip  = card.querySelector('.proj-chip-estado');
+        const title = targetSection?.querySelector('.proj-section-title');
+        if (chip && title){
+          // El CSS ya tiene text-transform: uppercase, así que con el título alcanza
+          chip.textContent = title.textContent.trim();
+        }
+      }
+
+      window.projDrag = function(ev){
+        const card = ev.currentTarget;
+        draggedProyectoId = card.dataset.proyecto;
+        ev.dataTransfer.effectAllowed = 'move';
+      };
+
+      window.projDragEnd = function(){
+        draggedProyectoId = null;
+        document.querySelectorAll('.proj-grid.is-drop-target')
+          .forEach(el => el.classList.remove('is-drop-target'));
+      };
+
+      window.projAllowDrop = function(ev){
+        ev.preventDefault();
+      };
+
+      window.projDragEnter = function(ev){
+        const grid = ev.currentTarget.closest('.proj-grid');
+        if (grid) grid.classList.add('is-drop-target');
+      };
+
+      window.projDragLeave = function(ev){
+        const grid = ev.currentTarget.closest('.proj-grid');
+        if (grid) grid.classList.remove('is-drop-target');
+      };
+
+      window.projDropOnEstado = function(ev){
+        ev.preventDefault();
+        const grid = ev.currentTarget.closest('.proj-grid');
+        if (!grid || !draggedProyectoId) return;
+
+        const nuevoEstado   = grid.dataset.dropEstado;
+        const card          = document.querySelector('.proj-card[data-proyecto="' + draggedProyectoId + '"]');
+        if (!card) return;
+
+        const oldSection    = card.closest('.proj-section');
+        const targetSection = grid.closest('.proj-section');
+
+        // Mover visualmente la tarjeta
+        grid.appendChild(card);
+        grid.classList.remove('is-drop-target');
+
+        // Actualizar chip de estado y contadores de ambas columnas
+        updateCardEstadoChip(card, targetSection);
+        updateSectionCount(oldSection);
+        updateSectionCount(targetSection);
+
+        // Actualizar estado en el backend
+        const url = URL_CAMBIAR_ESTADO.replace('0', draggedProyectoId);
+        const fd  = new FormData();
+        fd.append('estado', nuevoEstado);
+        fd.append('csrfmiddlewaretoken', getCookie('csrftoken') || '');
+
+        fetch(url, {
+          method: 'POST',
+          body: fd,
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).catch(() => {
+          alert('No se pudo cambiar el estado del proyecto.');
+        });
+      };
+
     })();
   </script>
 {% endblock %}
