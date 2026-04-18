@@ -1,11 +1,16 @@
 # notificaciones/views.py
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.core.cache import cache
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
 
 from .models import Notificacion
+
+
+def _invalidar_cache(user_id: int) -> None:
+    cache.delete(f"noti_ctx_{user_id}")
 
 
 @login_required
@@ -33,6 +38,7 @@ def detalle(request: HttpRequest, pk: int) -> HttpResponse:
     if not n.leida:
         n.leida = True
         n.save(update_fields=["leida"])
+        _invalidar_cache(request.user.id)
 
     return render(request, "notificaciones/detalle.html", {"n": n})
 
@@ -46,6 +52,7 @@ def marcar_leida(request: HttpRequest, pk: int) -> HttpResponse:
     if not n.leida:
         n.leida = True
         n.save(update_fields=["leida"])
+        _invalidar_cache(request.user.id)
 
     messages.success(request, "Notificación marcada como leída.")
     return redirect(request.GET.get("next") or "notificaciones:lista")
@@ -60,6 +67,7 @@ def marcar_todas(request: HttpRequest) -> HttpResponse:
         Notificacion.objects.filter(user=request.user, leida=False).update(leida=True)
     )
     if updated:
+        _invalidar_cache(request.user.id)
         messages.success(request, "Todas las notificaciones fueron marcadas como leídas.")
     else:
         messages.info(request, "No había notificaciones nuevas para marcar.")
@@ -79,6 +87,7 @@ def api_marcar_leida(request: HttpRequest, pk: int) -> JsonResponse:
     if not n.leida:
         n.leida = True
         n.save(update_fields=["leida"])
+        _invalidar_cache(request.user.id)
     return JsonResponse({"ok": True, "id": n.pk, "leida": True})
 
 
@@ -89,4 +98,6 @@ def api_marcar_todas(request: HttpRequest) -> JsonResponse:
     Marca todas las notificaciones como leídas (JSON).
     """
     count = Notificacion.objects.filter(user=request.user, leida=False).update(leida=True)
+    if count:
+        _invalidar_cache(request.user.id)
     return JsonResponse({"ok": True, "marcadas": count})

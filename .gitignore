@@ -1,7 +1,10 @@
-# Ignorar entorno virtual
+# Entorno virtual
 .venv/
 
-# Archivos de base de datos SQLite
+# Variables de entorno (NUNCA commitear)
+.env
+
+# Base de datos SQLite
 *.sqlite3
 
 # Archivos temporales de Django
@@ -9,6 +12,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.log
+
+# Archivos estáticos compilados
+staticfiles/
 
 # Archivos de VSCode
 .vscode/

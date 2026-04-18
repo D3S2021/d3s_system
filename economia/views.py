@@ -1,72 +1,32 @@
+from collections import defaultdict
+from datetime import date
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Sum, Q, Value, DecimalField, CharField
-from django.http import HttpResponseBadRequest, HttpResponseForbidden, HttpResponse
+from django.db.models import Sum, Q, Value, DecimalField, CharField, F
+from django.db.models.functions import Coalesce, Cast
+from django.http import (
+    HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.timezone import now
-from django.db.models.functions import Coalesce, Cast
 
+from notificaciones.models import Notificacion
 from proyectos.models import HoraTrabajo, Proyecto
 
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from collections import defaultdict
-from datetime import date
-import re
-
 from .forms import GastoForm, GastoOwnEditForm, CategoriaQuickForm
-from .models import Transaccion, Categoria, PlanMensual
-from notificaciones.models import Notificacion
-
-
-# ---------------------------------------------------------------------------
-# Utils
-# ---------------------------------------------------------------------------
-
-def _safe_int(v, default: int):
-    """
-    Convierte cadenas como '2%C2%A0025', '2 025', '2,025' → 2025.
-    Quita todo lo que no sea dígito. Si queda vacío, devuelve default.
-    """
-    if v is None:
-        return default
-    s = str(v).replace("\u00A0", " ")  # NBSP a espacio normal
-    digits = re.sub(r"[^0-9]", "", s)
-    return int(digits) if digits else default
-
-
-def _to_decimal(x) -> Decimal:
-    """Convierte a Decimal tolerando None/str con separadores."""
-    if x is None:
-        return Decimal("0")
-    if isinstance(x, Decimal):
-        return x
-    s = str(x).strip()
-    # tolera "1.234,56" o "1234,56" o "1,234.56"
-    if "," in s and "." in s:
-        # uso el último separador como decimal
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    elif "," in s:
-        s = s.replace(",", ".")
-    try:
-        return Decimal(s)
-    except (InvalidOperation, ValueError):
-        return Decimal("0")
+from .models import Transaccion, Categoria, PlanMensual, TarifaHora
+from .utils import safe_int as _safe_int, to_decimal as _to_decimal
 
 
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
-
-from django.db.models import Sum, F
-from django.utils.timezone import now
-from django.contrib.auth.decorators import login_required, permission_required
 
 # --- Helper reutilizable para fijar/leer Mes-Año y guardarlo en sesión ---
 def _resolve_period(request):
@@ -309,30 +269,31 @@ def cambiar_estado_transaccion(request, pk):
     if nuevo not in {"pendiente", "aprobado", "rechazado"}:
         return HttpResponseBadRequest("Estado inválido.")
 
-    tx = get_object_or_404(Transaccion, pk=pk)
+    with transaction.atomic():
+        tx = get_object_or_404(Transaccion.objects.select_for_update(), pk=pk)
 
-    if nuevo == "aprobado":
-        cat_id = request.POST.get("categoria_id")
-        try:
-            categoria = Categoria.objects.get(pk=cat_id, activo=True)
-        except (Categoria.DoesNotExist, ValueError, TypeError):
-            messages.error(request, "Debes seleccionar una categoría para aprobar.")
+        if nuevo == "aprobado":
+            cat_id = request.POST.get("categoria_id")
+            try:
+                categoria = Categoria.objects.get(pk=cat_id, activo=True)
+            except (Categoria.DoesNotExist, ValueError, TypeError):
+                messages.error(request, "Debes seleccionar una categoría para aprobar.")
+                return redirect("economia:transacciones")
+
+            tx.categoria = categoria
+            tx.validado_por = request.user
+            tx.validado_en = now()
+            tx.estado = "aprobado"
+            tx.save(update_fields=["categoria", "estado", "validado_por", "validado_en"])
+            messages.success(request, "✅ Transacción aprobada y categorizada.")
             return redirect("economia:transacciones")
 
-        tx.categoria = categoria
+        # Rechazo o volver a pendiente
+        tx.estado = nuevo
         tx.validado_por = request.user
         tx.validado_en = now()
-        tx.estado = "aprobado"
-        tx.save(update_fields=["categoria", "estado", "validado_por", "validado_en"])
-        messages.success(request, "✅ Transacción aprobada y categorizada.")
-        return redirect("economia:transacciones")
-
-    # Rechazo o volver a pendiente
-    tx.estado = nuevo
-    tx.validado_por = request.user
-    tx.validado_en = now()
-    tx.save(update_fields=["estado", "validado_por", "validado_en"])
-    messages.success(request, "Estado actualizado.")
+        tx.save(update_fields=["estado", "validado_por", "validado_en"])
+        messages.success(request, "Estado actualizado.")
     return redirect("economia:transacciones")
 
 
@@ -369,20 +330,6 @@ def eliminar_transaccion(request, pk):
 # Transacciones pendientes (bandeja para validador)
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Transacciones pendientes (bandeja para validador)
-# ---------------------------------------------------------------------------
-from django.http import JsonResponse
-from proyectos.models import Proyecto  # 👈 importar proyectos para el select
-
-from django.http import JsonResponse
-from django.urls import reverse
-from django.utils.timezone import now
-from django.db import transaction
-
-# Asegurate de tener este import donde ya lo usás en el rechazo
-from notificaciones.models import Notificacion
-
 @login_required
 @permission_required("economia.can_validate_transactions", raise_exception=True)
 def transacciones_pendientes(request):
@@ -401,7 +348,7 @@ def transacciones_pendientes(request):
         try:
             tx_id  = int(request.POST.get("tx_id") or "0")
             accion = (request.POST.get("accion") or "").lower()  # 'aprobar' | 'rechazar'
-            tx = get_object_or_404(Transaccion, pk=tx_id, estado="pendiente")
+            tx = get_object_or_404(Transaccion.objects.select_for_update(), pk=tx_id, estado="pendiente")
 
             if accion == "aprobar":
                 # Categoría requerida
@@ -530,33 +477,17 @@ def _redir_err(request, msg: str):
 # ---------------------------------------------------------------------------
 # Planificación mensual
 # ---------------------------------------------------------------------------
-from django.db.models.functions import Cast
-from django.db.models import CharField
-from django.utils.timezone import now
-from django.contrib import messages
-from django.shortcuts import render, redirect
-
-from .models import Categoria, PlanMensual
 
 def planificar_mes(request):
     """
     Cargar/editar montos esperados por categoría para el mes/año.
     TODO se maneja como ENTEROS y se evita leer el DecimalField desde la BD.
     """
-    hoy = now().date()
-
-    def _safe_int(v, d):
-        if v is None:
-            return d
-        s = "".join(ch for ch in str(v) if ch.isdigit())
-        return int(s) if s else d
-
     year, month = _resolve_period(request)
 
     cats_gasto = list(Categoria.objects.filter(activo=True, tipo="gasto").order_by("nombre"))
     cats_ing   = list(Categoria.objects.filter(activo=True, tipo="ingreso").order_by("nombre"))
 
-    # ---------- helpers sólo enteros ----------
     def parse_int(raw) -> int:
         s = (raw or "").strip()
         s = (s.replace(" ", "")
@@ -953,19 +884,10 @@ def categoria_eliminar(request, pk):
         return redirect(f"{reverse('economia:planificar_mes')}?year={year}&month={month}")
     return redirect("economia:planificar_mes")
 
-# economia/views.py
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required, permission_required
-from django.shortcuts import render
-from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest
 from django.contrib.auth import get_user_model
-from django.db import transaction
-
-from .models import TarifaHora
 
 User = get_user_model()
 
-from decimal import Decimal  # ya lo tenías arriba; asegúrate de tenerlo
 
 @login_required
 @permission_required("proyectos.can_manage_economia", raise_exception=True)
@@ -1044,13 +966,6 @@ def tarifas_json(request):
     """
     data = {t.user_id: float(t.precio) for t in TarifaHora.objects.all()}
     return JsonResponse(data)
-
-# economia/views.py
-from django.contrib.auth.decorators import login_required, permission_required
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from proyectos.models import HoraTrabajo
-
 
 @login_required
 @permission_required('economia.view_dashboard', raise_exception=True)

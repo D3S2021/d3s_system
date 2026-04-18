@@ -11,10 +11,7 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ====== Seguridad y modo debug ======
-SECRET_KEY = os.getenv(
-    'SECRET_KEY',
-    'django-insecure-f*=!n&k2=+#oind4b$kaggv8b40@8b42*-yd*)2i@q(wn8mwy*'
-)
+SECRET_KEY = os.environ['SECRET_KEY']
 DEBUG = os.getenv('DEBUG', '1') == '1'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
@@ -133,5 +130,65 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
-WHATSAPP_GRAPH_VERSION = "v20.0"               # opcional, por si querés cambiarla fácil
-WHATSAPP_TEST_TO = "+5493413192442"            # REEMPLAZAR por tu número de prueba en E.164
+WHATSAPP_GRAPH_VERSION = os.getenv("WHATSAPP_GRAPH_VERSION", "v20.0")
+WHATSAPP_TEST_TO = os.getenv("WHATSAPP_TEST_TO", "")
+
+# ====== Caché ======
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "d3s-cache",
+    }
+}
+
+# ====== Headers de seguridad ======
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000          # 1 año
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+# ====== Logging ======
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "economia": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "proyectos": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
