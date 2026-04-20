@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
@@ -22,6 +23,8 @@ from proyectos.models import HoraTrabajo, Proyecto
 from .forms import GastoForm, GastoOwnEditForm, CategoriaQuickForm
 from .models import Transaccion, Categoria, PlanMensual, TarifaHora
 from .utils import safe_int as _safe_int, to_decimal as _to_decimal
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -348,76 +351,69 @@ def transacciones_pendientes(request):
         try:
             tx_id  = int(request.POST.get("tx_id") or "0")
             accion = (request.POST.get("accion") or "").lower()  # 'aprobar' | 'rechazar'
-            tx = get_object_or_404(Transaccion.objects.select_for_update(), pk=tx_id, estado="pendiente")
 
-            if accion == "aprobar":
-                # Categoría requerida
-                cat_id = request.POST.get("categoria_id")
-                if not cat_id:
-                    msg = "Debés seleccionar una categoría para aprobar."
-                    return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
+            with transaction.atomic():
+                tx = get_object_or_404(Transaccion.objects.select_for_update(), pk=tx_id, estado="pendiente")
 
-                try:
-                    categoria = Categoria.objects.get(pk=cat_id, activo=True)
-                except Categoria.DoesNotExist:
-                    msg = "Categoría inválida."
-                    return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
+                if accion == "aprobar":
+                    # Categoría requerida
+                    cat_id = request.POST.get("categoria_id")
+                    if not cat_id:
+                        msg = "Debés seleccionar una categoría para aprobar."
+                        return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
 
-                # Proyecto opcional
-                proyecto = None
-                proj_raw = (request.POST.get("proyecto_id") or "").strip()
-                if proj_raw.isdigit():
                     try:
-                        proyecto = Proyecto.objects.get(pk=int(proj_raw))
-                    except Proyecto.DoesNotExist:
-                        proyecto = None  # lo ignoramos si no existe
+                        categoria = Categoria.objects.get(pk=cat_id, activo=True)
+                    except Categoria.DoesNotExist:
+                        msg = "Categoría inválida."
+                        return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
 
-                efectivo_flag = bool(request.POST.get("efectivo"))
+                    # Proyecto opcional
+                    proyecto = None
+                    proj_raw = (request.POST.get("proyecto_id") or "").strip()
+                    if proj_raw.isdigit():
+                        try:
+                            proyecto = Proyecto.objects.get(pk=int(proj_raw))
+                        except Proyecto.DoesNotExist:
+                            proyecto = None
 
-                # Guardar aprobación
-                tx.categoria    = categoria
-                tx.proyecto     = proyecto      # <-- queda linkeado si lo eligieron
-                tx.estado       = "aprobado"
-                tx.validado_por = request.user
-                tx.validado_en  = now()
-                tx.es_efectivo  = efectivo_flag
-                tx.save(update_fields=[
-                    "categoria", "proyecto", "estado", "validado_por", "validado_en", "es_efectivo"
-                ])
+                    efectivo_flag = bool(request.POST.get("efectivo"))
 
-                # 🔔 Notificación de APROBACIÓN (simple, sin comentario)
-                if tx.usuario_id:
-                    titulo = f"TU TRANSACCIÓN DE ${tx.monto:,.2f} FUE APROBADA"
-                    cuerpo = (
-                        f"Monto: ${tx.monto:,.2f}\n"
-                        f"Fecha: {tx.fecha:%Y-%m-%d}\n"
-                        f"Categoría: {tx.categoria.nombre if tx.categoria_id else '—'}"
-                    )
-                    if proyecto:
-                        cuerpo += f"\nProyecto: {proyecto.nombre}"
+                    tx.categoria    = categoria
+                    tx.proyecto     = proyecto
+                    tx.estado       = "aprobado"
+                    tx.validado_por = request.user
+                    tx.validado_en  = now()
+                    tx.es_efectivo  = efectivo_flag
+                    tx.save(update_fields=[
+                        "categoria", "proyecto", "estado", "validado_por", "validado_en", "es_efectivo"
+                    ])
 
-                    notif = Notificacion.objects.create(
-                        user=tx.usuario,
-                        titulo=titulo,
-                        cuerpo=cuerpo,
-                        url=""
-                    )
-                    notif.url = reverse("notificaciones:detalle", args=[notif.id])
-                    notif.save(update_fields=["url"])
+                    if tx.usuario_id:
+                        titulo = f"TU TRANSACCIÓN DE ${tx.monto:,.2f} FUE APROBADA"
+                        cuerpo = (
+                            f"Monto: ${tx.monto:,.2f}\n"
+                            f"Fecha: {tx.fecha:%Y-%m-%d}\n"
+                            f"Categoría: {tx.categoria.nombre if tx.categoria_id else '—'}"
+                        )
+                        if proyecto:
+                            cuerpo += f"\nProyecto: {proyecto.nombre}"
 
-                if is_ajax:
-                    return JsonResponse({"ok": True})
-                messages.success(request, "Transacción aprobada y categorizada.")
-                return redirect("economia:pendientes")
+                        notif = Notificacion.objects.create(
+                            user=tx.usuario,
+                            titulo=titulo,
+                            cuerpo=cuerpo,
+                            url=""
+                        )
+                        notif.url = reverse("notificaciones:detalle", args=[notif.id])
+                        notif.save(update_fields=["url"])
 
-            elif accion == "rechazar":
-                comentario = (request.POST.get("comentario") or "").strip()
-                if not comentario:
-                    msg = "Debés indicar un motivo de rechazo."
-                    return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
+                elif accion == "rechazar":
+                    comentario = (request.POST.get("comentario") or "").strip()
+                    if not comentario:
+                        msg = "Debés indicar un motivo de rechazo."
+                        return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
 
-                # Notificación + eliminación de comprobante y transacción
-                with transaction.atomic():
                     if tx.usuario_id:
                         titulo = f"TU TRANSACCIÓN DE ${tx.monto:,.2f} FUE RECHAZADA"
                         cuerpo = f"Monto: ${tx.monto:,.2f}\nFecha: {tx.fecha:%Y-%m-%d}\nMotivo: {comentario}"
@@ -433,16 +429,22 @@ def transacciones_pendientes(request):
 
                     tx.delete()
 
+                else:
+                    msg = "Acción inválida."
+                    return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
+
+            if accion == "aprobar":
+                if is_ajax:
+                    return JsonResponse({"ok": True})
+                messages.success(request, "Transacción aprobada y categorizada.")
+            else:
                 if is_ajax:
                     return JsonResponse({"ok": True})
                 messages.warning(request, "Transacción rechazada y eliminada.")
-                return redirect("economia:pendientes")
-
-            else:
-                msg = "Acción inválida."
-                return JsonResponse({"ok": False, "error": msg}, status=400) if is_ajax else _redir_err(request, msg)
+            return redirect("economia:pendientes")
 
         except Exception as e:
+            logger.exception("Error al procesar transacción pendiente (tx_id=%s, accion=%s)", request.POST.get("tx_id"), request.POST.get("accion"))
             if is_ajax:
                 return JsonResponse({"ok": False, "error": str(e)}, status=500)
             messages.error(request, "Ocurrió un error.")
