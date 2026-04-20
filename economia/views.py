@@ -443,12 +443,9 @@ def transacciones_pendientes(request):
                 messages.warning(request, "Transacción rechazada y eliminada.")
             return redirect("economia:pendientes")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Error al procesar transacción pendiente (tx_id=%s, accion=%s)", request.POST.get("tx_id"), request.POST.get("accion"))
-            if is_ajax:
-                return JsonResponse({"ok": False, "error": str(e)}, status=500)
-            messages.error(request, "Ocurrió un error.")
-            return redirect("economia:pendientes")
+            raise
 
     # GET
     pendientes = (
