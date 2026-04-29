@@ -1,4 +1,4 @@
-<form id="formHoras" method="post" action="{% url 'proyectos:horas_nueva' %}">
+<form id="formHoras" method="post" action="{% if obj %}{% url 'proyectos:horas_editar' obj.pk %}{% else %}{% url 'proyectos:horas_nueva' %}{% endif %}">
   {% csrf_token %}
 
   <div class="mb-3">

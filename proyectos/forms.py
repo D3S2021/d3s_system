@@ -334,12 +334,12 @@ class HoraTrabajoForm(forms.ModelForm):
     inicio = forms.TimeField(
         label="Inicio",
         input_formats=["%H:%M"],
-        widget=forms.TimeInput(attrs={"type": "time", "step": "60"})
+        widget=forms.TimeInput(attrs={"type": "time", "step": "60"}, format="%H:%M")
     )
     fin = forms.TimeField(
         label="Fin",
         input_formats=["%H:%M"],
-        widget=forms.TimeInput(attrs={"type": "time", "step": "60"})
+        widget=forms.TimeInput(attrs={"type": "time", "step": "60"}, format="%H:%M")
     )
 
     class Meta:
