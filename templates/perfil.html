@@ -850,7 +850,8 @@ document.addEventListener('click', function(e){
     if (!form) return;
 
     function parseHM(v){
-      const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec((v||'').trim());
+      // Acepta HH:MM o HH:MM:SS (algunos browsers devuelven segundos aunque step=60)
+      const m = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/.exec((v||'').trim());
       if (!m) return null;
       return parseInt(m[1],10)*60 + parseInt(m[2],10);
     }
